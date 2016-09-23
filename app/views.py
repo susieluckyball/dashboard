@@ -1,6 +1,6 @@
 import shlex
 import subprocess
-from flask import Flask, request, render_template, redirect, flash, url_for, jsonify
+from flask import Flask, request, render_template, redirect, flash, url_for, jsonify, session
 from flask.ext.wtf import Form 
 from wtforms import TextField, SubmitField
 from wtforms.validators import DataRequired
@@ -15,8 +15,9 @@ class CommandForm(Form):
 
 @main.route('/', methods=['GET', 'POST'])
 def index():
+    form = CommandForm(request.form)
     if request.method == 'GET':
-        return render_template('index.html')
+        return render_template('index.html', form=form)
     return redirect(url_for('main.index'))
 
 # @celery.task(bind=True)
@@ -41,38 +42,21 @@ def index():
 
 
 @celery.task(bind=True)
-def execute_command(command):
+def execute_command(self, command):
     # logging.info("Executing command in Celery " + command)
     args = shlex.split(command)
-    subprocess.check_call(args, shell=True)
+    print args
+    subprocess.check_call(args)
+    return {'status': 'Pending',
+            'state': 'Pending'}
 
 
-@main.route('/status/<task_id>')
+@main.route('/status/<task_id>', methods=['GET'])
 def taskstatus(task_id):
-    task = long_task.AsyncResult(task_id)
-    if task.state == 'PENDING':
-        response = {
+    task = execute_command.AsyncResult(task_id)
+    print task.state
+    response = {
             'state': task.state,
-            'current': 0,
-            'total': 1,
-            'status': 'Pending...'
-        }
-    elif task.state != 'FAILURE':
-        response = {
-            'state': task.state,
-            'current': task.info.get('current', 0),
-            'total': task.info.get('total', 1),
-            'status': task.info.get('status', '')
-        }
-        if 'result' in task.info:
-            response['result'] = task.info['result']
-    else:
-        # something went wrong in the background job
-        response = {
-            'state': task.state,
-            'current': 1,
-            'total': 1,
-            'status': str(task.info),  # this is the exception raised
         }
     return jsonify(response)
 
@@ -85,14 +69,11 @@ def taskstatus(task_id):
 
 @main.route('/add_task', methods=['POST'])
 def add_task():
-    form = CommandForm(request.form)
-    print("------")
-    print(form.errors)
-    print(request.form['command'])
-    # if form.validate():
-    cmd = request.form['command']
+    cmd = request.form['cmd']
+    print('==============')
+    print(cmd, type(cmd))
     flash('Input command: ' + cmd)
-    task = execute_command.apply_async(args[cmd])
+    task = execute_command.apply_async(args=[cmd])
 
-    return jsonify({}), 202, {'Location': url_for('main.taskstatus',
+    return jsonify({}), 201, {'Location': url_for('main.taskstatus',
                                               task_id=task.id)}
