@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>Add/Edit Job</h2>
+    <form id='editjob' action="" method="post" name='job'>
+    {{ form.hidden_tag() }}
+    {{ form.csrf_token }}
+    <p>
+        {{ form.name.label }}<br>
+        {{ form.name }}<br>
+    </p>
+    <p>
+        {{ form.timezone.label }}<br>
+        {{ form.timezone }}<br>
+    </p>
+    <p>
+        {{ form.start_dt.label }}<br>
+        {{ form.start_dt }}<br>
+    </p>
+
+    <p>
+        {{ form.end_dt.label }}<br>
+        {{ form.end_dt }}<br>
+    </p>
+
+    <p>
+        {{ form.schedule_interval.label }}<br>
+        {{ form.schedule_interval }}<br>
+    </p>
+    <p>
+        {{ form.operator.label }}<br>
+        {{ form.operator }}<br>
+    </p>
+
+    <p>
+        {{ form.command.label }}<br>
+        {{ form.command }}<br>
+    </p>
+
+    <p><input type=submit id="submit_job" value='Submit'></p>
+    </form>
+    
+    {% block page_content %}{% endblock %}
+</div>
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script src="{{ url_for('static', filename='bootstrap-tagsinput.min.js')}}">
+{% endblock %}

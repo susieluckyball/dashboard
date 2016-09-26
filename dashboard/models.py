@@ -7,7 +7,8 @@ from redis_api import get_redis_conn
 from utils import convert_to_utc
 
 class RedisObject:
-    root = ""
+    root = "/"
+    fmt = "/"
 
     @property
     def redis_key(self):
@@ -19,7 +20,7 @@ class RedisObject:
 
     @classmethod
     def create_redis_key(cls, **kwargs):
-        return cls.root.format(**kwargs)
+        return cls.fmt.format(**kwargs)
 
     def serialize(self, redis_conn):
         print("serialize {} for {}".format(self.__class__.__name__, self.redis_key))
@@ -44,7 +45,8 @@ class RedisObject:
 
 
 class Task(RedisObject):
-    root = "/tasks/{job}/{ts}"
+    root = "/tasks/"
+    fmt = "/tasks/{job}/{ts}"
 
     def __init__(self, job_name, timestamp, command):
         self.job = job_name
@@ -56,23 +58,24 @@ class Task(RedisObject):
         self.task_id = None
 
 
-
 class Job(RedisObject):
-    root = "/jobs/{name}"
-    def __init__(self, name, timezone, start_dt=None, end_dt=None,
+    root = "/jobs/"
+    fmt = "/jobs/{name}"
+    def __init__(self, name, timezone, start_dt="", end_dt="",
                 active=True, schedule_interval=timedelta(days=1),
                 operator="bash", command="", tags=None, **kwargs):
         self.name = name 
         self.timezone = timezone 
         self.update_time = datetime.utcnow()
-        if start_dt is None:
+
+        if start_dt == "":
             self.start_dt = datetime.utcnow()
         else:
             self.start_dt = convert_to_utc(start_dt, timezone)
-        if end_dt is None:
+        if end_dt == "":
             self.end_dt = None 
         else:
-            self.end_dt = convert_to_utc(start_dt, timezone)
+            self.end_dt = convert_to_utc(end_dt, timezone)
         if isinstance(active, str):
             self.active = True if active == 'True' else False 
         else:
@@ -87,7 +90,7 @@ class Job(RedisObject):
         self._redis_key = self.create_redis_key(name=name)
 
     def serialize(self, redis_conn):
-        super().serialize(redis_conn)
+        RedisObject.serialize(self, redis_conn)
         # convert scheduled interval
         redis_conn.hset(self.redis_key, 'schedule_interval', 
                     int(self.schedule_interval.total_seconds()))
@@ -102,8 +105,13 @@ class RequestHandler:
     @classmethod
     def add_job(cls, args):
         # create a job instance and add to redis 
-        
-        job = Job(**vars(args))
+        if isinstance(args, dict):
+            # ImmutableMultiDict from flask web form 
+            # convert to dict
+            args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
+            job = Job(**args_dict)
+        else:
+            job = Job(**vars(args))
         redis_conn = get_redis_conn()
         job.serialize(redis_conn)
 
@@ -116,7 +124,7 @@ class RequestHandler:
         # remove from jobs_bag
         redis_conn = get_redis_conn()
         job = Job.deserialize(redis_conn, name=args.name)
-        print(job)
+        print("deactivate job: ", job)
         for k in vars(job):
             if not k.startswith("__"):
                 print(k, getattr(job, k), type(getattr(job, k)))
@@ -126,11 +134,54 @@ class RequestHandler:
         redis_conn.hdel(JobsBag.next_run_key, job.name)
 
     @classmethod
-    def clear_db(cls, args):
+    def clear_db(cls):
         redis_conn = get_redis_conn()
-        confirm = input("Flush db will clear all existing data [Y/N]: ")
-        if confirm.upper().startswith('Y'):
-            redis_conn.flushdb()
+        redis_conn.flushdb()
+
+    @classmethod 
+    def info_all_jobs(cls):
+        redis_conn = get_redis_conn()
+        all_jobs = redis_conn.keys(Job.root + "*")
+        # categorize by activeness
+        active_jobs = []
+        inactive_jobs = []
+        for job_key in all_jobs:
+            active = redis_conn.hget(job_key, 'active')
+            if active == 'True':
+                active_jobs.append(job_key.strip(Job.root))
+            else:
+                inactive_jobs.append(job_key.strip(Job.root))
+
+        return {'active': active_jobs,
+                'inactive': inactive_jobs}
+
+    @classmethod
+    def info_job(cls, job_name):
+        redis_conn = get_redis_conn()
+        job_info = redis_conn.hgetall(
+            Job.create_redis_key(name=job_name))
+        return job_info
+
+    @classmethod
+    def info_task_by_job(cls, job_name):
+        redis_conn = get_redis_conn()
+        all_tasks = redis_conn.keys(Task.root + job_name + "*")
+        # categorize by status
+        task_status = {"pending": [],
+                "progress": [],
+                "fail": [],
+                "success": []}
+        for task_key in all_tasks:
+            status = redis_conn.hget(task_key, 'status')
+            if status == 'PENDING':
+                task_status['pending'].append(task_key.strip(Task.root))
+            elif status == "PROGRESS":
+                task_status['progress'].append(task_key.strip(Task.root))
+            elif status == "SUCCESS":
+                task_status['success'].append(task_key.strip(Task.root))
+            else:
+                task_status['fail'].append(task_key.strip(Task.root))
+        return task_status
 
     @classmethod
     def add_tag_to_job(cls, args):
@@ -188,12 +239,14 @@ class ScheduleManager(object):
             sleep(poll_interval)
 
     def send_heartbeat(self):
+        # TODO:
+        # should design heartbeat functionality 
+        # for failure recovery/alert
         self.redis_conn.set(self.name, datetime.now())
-
 
     def check_schedule_time(self):
         active_jobs = self.redis_conn.hgetall(self.next_run_key)
-        print("jobs: ",active_jobs)
+        print("check jobs: ",active_jobs)
         tx = self.redis_conn.pipeline()
         for job_name, next_run in active_jobs.items():
             next_run_ts = pd.to_datetime(next_run)
@@ -204,7 +257,7 @@ class ScheduleManager(object):
 
     def check_tasks_status(self):
         active_task_names = self.redis_conn.lrange(self.active_tasks_key, 0, -1)
-        print("tasks: ", active_task_names)
+        print("check tasks: ", active_task_names)
         finished_tasks = []
         for name in active_task_names:
             task_id = self.redis_conn.hget(name, 'task_id')
@@ -220,21 +273,21 @@ class ScheduleManager(object):
 
     def schedule_task(self, job_name, timestamp):
         job_key = Job.create_redis_key(name=job_name)
-        schedule_interval = self.redis_conn.hget(job_key,
-                 "schedule_interval")
+        schedule_interval = int(self.redis_conn.hget(job_key,
+                 "schedule_interval"))
      
         command = self.redis_conn.hget(job_key, 'command')
         task = Task(job_name, timestamp, command)
         
         # put celery queue
-        print("schedule task for job {}".format(job_name))
+        print("schedule task for job {} at utc {}".format(job_name, timestamp))
         celery_task = execute_command.apply_async(args=[task.command])
         task.status = 'PENDING'
         task.task_id = celery_task.id
 
         # write a record to redis
         task.serialize(self.redis_conn)  
-        self.redis_conn.rpush(self.active_tasks_key, task.redis_key)      
+        self.redis_conn.rpush(self.active_tasks_key, task.redis_key) 
 
         # return next scheduled time
         return timestamp + timedelta(seconds=int(schedule_interval))

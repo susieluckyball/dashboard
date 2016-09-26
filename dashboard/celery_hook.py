@@ -16,10 +16,10 @@ class CeleryConfig(object):
     # CELERY_DEFAULT_EXCHANGE = DEFAULT_QUEUE
 
 
-app = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL,
-	backend=CeleryConfig.CELERY_RESULT_BACKEND)
+worker = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL)
+worker.conf.update(CELERY_RESULT_BACKEND='redis')
 
-@app.task
+@worker.task
 def execute_command(command):
     try:
         subprocess.check_call(command, shell=True)

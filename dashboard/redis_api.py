@@ -7,12 +7,12 @@ from utils import Singleton
 def get_redis_conn():
 	return _redis_conn
 
-# to decode 
+# convert from bytes to string...
 class RedisConn(StrictRedis):
 	__metaclass__ = Singleton
 
 	def hgetall(self, name):
-		d = super().hgetall(name)
+		d = StrictRedis.hgetall(self, name)
 		decoded_d = {}
 		for k, v in d.items():
 			k = k.decode() if isinstance(k, bytes) else k 
@@ -21,7 +21,7 @@ class RedisConn(StrictRedis):
 		return decoded_d
 
 	def hget(self, name, key):
-		v = super().hget(name, key)
+		v = StrictRedis.hget(self, name, key)
 		v = v.decode() if isinstance(v, bytes) else v
 		return v
 
