@@ -1,38 +1,65 @@
-<!doctype html>
-<html>
-  <head>
-    <title>Dashboard Prototype</title>
-    <style>
-        .progress {
-            width: 100%;
-            text-align: center;
-        }
-    </style>
-  </head>
-  <body>
-    <h1>Dashboard Prototype</h1>
-    <h2>Add task</h2>
-    
-    <form id='myform' action="" method=['POST'] name='cmd'>
+{% extends "base.html" %}
 
-    {{ form.hidden_tag() }}
-    {{ form.cmd.label }}
-    <br>
-    {{ form.cmd }}
-    <br>
-    <input type=submit id="start-bg-job" value=Register>
-    </form>
-    
-    <h1 id="state">hahaha</h1>
-    <div id="progress"></div>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
-    <script>
-        function enqueue_task() {
-            // add task status elements
+{% block page_content %}
+<h1>Dashboard Prototype</h1>
+<h2>Add task</h2>
 
-            // create a progress bar
+<form id='myform' action="" method=['POST'] name='cmd'>
+{{ form.hidden_tag() }}
+{{ form.cmd.label }}
+<br>
+{{ form.cmd }}
+<br>
+<input type=submit id="start-bg-job" value=Register>
+</form>
 
-            // send ajax POST request to start background job
+<h1 id="state">hahaha</h1>
+
+<label for="basic-url">Tags</label>
+<div class="input-group" data-role="tagsinput">
+  <input type="text" class="form-control" id="basic-url" aria-describedby="basic-addon3" data-role="tagsinput">
+</div>
+
+<script>
+    function enqueue_task() {
+        // add task status elements
+
+        // create a progress bar
+
+        // send ajax POST request to start background job
+        $.ajax({
+            type: 'POST',
+            url: '/add_task',
+            data: $('form').serialize(),
+            success: function(data, status, request) {
+                status_url = request.getResponseHeader('Location');
+                update_progress(status_url);
+            },
+            error: function() {
+                alert('Unexpected error');
+            }
+        });
+    }
+    function update_progress(status_url) {
+        // send GET request to status URL
+        $.getJSON(status_url, function(data) {
+            // update UI
+            $("#state").text(data['state']);
+            if (data['state'] != 'PENDING' && data['state'] != 'PROGRESS') {
+                
+            } 
+            else {
+                // rerun in 2 seconds
+                setTimeout(function() {
+                    update_progress(status_url);
+                }, 2000);
+            }
+        });
+    }
+
+    $(document).ready(function () {
+        $('#myform').on('submit', function(e) {
+            e.preventDefault();
             $.ajax({
                 type: 'POST',
                 url: '/add_task',
@@ -45,41 +72,8 @@
                     alert('Unexpected error');
                 }
             });
-        }
-        function update_progress(status_url) {
-            // send GET request to status URL
-            $.getJSON(status_url, function(data) {
-                // update UI
-                $("#state").text(data['state']);
-                if (data['state'] != 'PENDING' && data['state'] != 'PROGRESS') {
-                    
-                } 
-                else {
-                    // rerun in 2 seconds
-                    setTimeout(function() {
-                        update_progress(status_url);
-                    }, 2000);
-                }
-            });
-        }
-
-        $(document).ready(function () {
-            $('#myform').on('submit', function(e) {
-                e.preventDefault();
-                $.ajax({
-                    type: 'POST',
-                    url: '/add_task',
-                    data: $('form').serialize(),
-                    success: function(data, status, request) {
-                        status_url = request.getResponseHeader('Location');
-                        update_progress(status_url);
-                    },
-                    error: function() {
-                        alert('Unexpected error');
-                    }
-                });
-            });
         });
-    </script>
-  </body>
-</html>
+    });
+
+</script>
+{% endblock %}
