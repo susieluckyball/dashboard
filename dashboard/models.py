@@ -70,12 +70,12 @@ class Job(Base):
         self.timezone = timezone
         self.update_time = datetime.utcnow() 
 
-        if start_dt is None:
+        if start_dt is None or start_dt == '':
             self.start_dt = datetime.utcnow()
         else:
             self.start_dt = convert_to_utc(start_dt, timezone)
 
-        if end_dt is None:
+        if end_dt is None or end_dt == '':
             self.end_dt = None 
         else:
             self.end_dt = convert_to_utc(end_dt, timezone)
@@ -199,6 +199,7 @@ class RequestHandler:
             # convert to dict
             args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
             # args_dict = {k: v for k, v in args.items()}
+            print(args_dict)
             job = Job(**args_dict)
         else:
             job = Job(**vars(args))
@@ -255,11 +256,12 @@ class RequestHandler:
 
 
     @classmethod
-    def info_job(cls, job_name):
-        redis_conn = get_redis_conn()
-        job_info = redis_conn.hgetall(
-            Job.create_redis_key(name=job_name))
-        return job_info
+    def info_job(cls, job_name, session=get_sql_session()):
+        job = session.query(Job).filter(Job.name==job_name).first()
+        tasks = session.query(TaskInstance).filter(
+                TaskInstance.job_id==job.id).order_by(
+                TaskInstance.execution_date.desc()).all()
+        return job, tasks
 
     @classmethod
     def info_task_by_job(cls, job_name):

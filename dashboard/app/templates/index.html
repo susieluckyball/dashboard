@@ -3,6 +3,16 @@
 {% block page_content %}
 <div class="container">
     <div><h1>Datadashboard Demo</h1><div>
+    <h2> All Active Jobs </h2>
+    <hr>
+    {% for job in active_jobs %}
+    <p> 
+    	Name: <a href="{{ url_for('main.info_job', job_name=job.name ) }}">{{ job.name }}</a> <br>
+    	Timezone: {{ job.timezone }} <br>
+    	Command: {{ job.command }} <br>
+    	Next Run UTC: {{ job.next_run_ts }} <br>
+    </p>
+    {% endfor %}
 </div>
 
 {% endblock %}

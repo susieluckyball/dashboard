@@ -25,15 +25,18 @@ class JobForm(Form):
 @main.route('/', methods=['GET', 'POST'])
 @main.route('/index', methods=['GET', 'POST'])
 def index():
-    return render_template('index.html')
+    all_jobs = RequestHandler.info_all_jobs()
+    return render_template('index.html', 
+                active_jobs=all_jobs["active"])
 
 @main.route('/edit_job', methods=['GET', 'POST'])
-def edit_job_handler():
+def edit_job():
+    form = JobForm()
     if request.method == 'POST' and form.validate():
         flash("Job create request for job name {}".format(request.form["name"]), "success")
         RequestHandler.add_job(request.form)
         return redirect(url_for('main.index'))
-    return render_template('edit_job.html', form=JobForm())
+    return render_template('edit_job.html', form=form)
 
 
 # @main.route('/info_job', methods=['GET'])
@@ -42,5 +45,8 @@ def edit_job_handler():
          
 
 
-# @main.route('/info_job/<job_name>', method=['GET'])
-# def info_job_handler():
+@main.route('/info_job/<job_name>', methods=['GET'])
+def info_job(job_name):
+    job, tasks = RequestHandler.info_job(job_name)
+    return render_template('job.html', job=job, tasks=tasks)
+

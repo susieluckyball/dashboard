@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block page_content %}
+<div class="container">
+    <div><h1>Job Info: {{job.name}}</h1><div>
+    <p> 
+        Timezone: {{ job.timezone }} <br>
+    	Command: {{ job.command }} <br>
+    	Next Run UTC: {{ job.next_run_ts }} <br>
+    </p>
+
+    <script>
+    function statusColor() {
+        var element = document.getElementById("state");
+        if (element.innerHTML.contains("SUCCESS"))
+            element.style.color = "green";
+        else
+            element.style.color = "red";
+    }
+
+    </script>
+
+    <hr>
+    <h2>All executed tasks in time order: </h2>
+    {% for task in tasks %}
+    <p id="state">
+        Execution Time: {{task.execution_date}}  Status: {{task.state}}<br>
+        <script>statusColor();</script>
+    </p>
+    {% endfor %}
+</div>
+
+{% endblock %}
