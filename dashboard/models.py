@@ -108,7 +108,8 @@ class RequestHandler:
         if isinstance(args, dict):
             # ImmutableMultiDict from flask web form 
             # convert to dict
-            args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
+            # args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
+            args_dict = {k: v for k, v in args.items()}
             job = Job(**args_dict)
         else:
             job = Job(**vars(args))

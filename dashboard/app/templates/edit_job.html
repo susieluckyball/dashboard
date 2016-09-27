@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
-{% block content %}
+{% block page_content %}
+
 <div class="container">
+
     <h2>Add/Edit Job</h2>
     <form id='editjob' action="" method="post" name='job'>
     {{ form.hidden_tag() }}
@@ -40,8 +42,7 @@
 
     <p><input type=submit id="submit_job" value='Submit'></p>
     </form>
-    
-    {% block page_content %}{% endblock %}
+
 </div>
 
 <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>

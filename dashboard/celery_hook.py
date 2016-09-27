@@ -16,8 +16,9 @@ class CeleryConfig(object):
     # CELERY_DEFAULT_EXCHANGE = DEFAULT_QUEUE
 
 
-worker = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL)
-worker.conf.update(CELERY_RESULT_BACKEND='redis')
+worker = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL,
+        backend=CeleryConfig.CELERY_RESULT_BACKEND)
+# worker.conf.update(CELERY_RESULT_BACKEND='redis')
 
 @worker.task
 def execute_command(command):

@@ -29,12 +29,11 @@ def index():
 
 @main.route('/edit_job', methods=['GET', 'POST'])
 def edit_job_handler():
-    form = JobForm(request.form)
     if request.method == 'POST' and form.validate():
-        flash("Job create request for job name {}".format(form.name))
+        flash("Job create request for job name {}".format(request.form["name"]), "success")
         RequestHandler.add_job(request.form)
         return redirect(url_for('main.index'))
-    return render_template('edit_job.html', form=form)
+    return render_template('edit_job.html', form=JobForm())
 
 
 # @main.route('/info_job', methods=['GET'])
