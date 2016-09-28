@@ -1,5 +1,6 @@
 from celery import Celery
 from celery import states as celery_states
+import shlex
 import subprocess
 
 from dashboard.config import Config
@@ -23,6 +24,7 @@ worker.conf.update(CELERY_RESULT_BACKEND='redis')
 @worker.task
 def execute_command(command):
     try:
-        subprocess.check_call(command, shell=True)
+        cmd_lst = shlex.split(command)
+        return subprocess.check_output(cmd_lst, shell=True)
     except subprocess.CalledProcessError as e:
-        raise RuntimeError('Celery command failed')
+        raise RuntimeError('Celery command failed\n{}'.format(e))

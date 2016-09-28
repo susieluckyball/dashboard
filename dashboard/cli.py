@@ -49,13 +49,17 @@ def info_jobs(args):
 
 def clear_db_func(args):
     if args.redis:
-        confirm = raw_input("Flush db will clear all existing data in redis [Y/N]: ")
+        confirm = raw_input("Flush db will clear all existing data in redis (celery related) [Y/N]: ")
         if confirm.upper().startswith('Y'):
             RequestHandler.clear_redis()
         else:
             logger.info("Clear db aborted.")
     elif args.sql:
-        RequestHandler.clear_sql_db()
+        confirm = raw_input("Flush db will clear all existing data in sql server (jobs and tasks info) [Y/N]: ")
+        if confirm.upper().startswith('Y'):
+            RequestHandler.clear_sql_db()
+        else:
+            logger.info("Clear db aborted.")
 
 def main():
     parser = argparse.ArgumentParser()

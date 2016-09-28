@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import functools
 import logging
 import pandas as pd
 from time import sleep
@@ -24,29 +25,45 @@ logger = logging.getLogger(__name__)
 # db models
 ############
 
+@functools.total_ordering
 class TaskInstance(Base):
     __tablename__ = 'task_instance'
     id = Column(Integer, primary_key=True, autoincrement=True)
     job_id = Column(Integer, nullable=False)
+    job_name = Column(String(100), nullable=False)
     execution_date = Column(DateTime, nullable=False)
     operator = Column(String(1000))
     command = Column(String(1000), nullable=False)
     state = Column(String(20))
     task_id = Column(String(ID_LEN))
+    result = Column(String(1000))
 
     def __init__(self, job):
         self.job_id = job.id 
+        self.job_name = job.name
         self.execution_date = job.next_run_ts 
         self.operator = job.operator 
         self.command = job.command 
         self.state = 'PENDING'
         self.task_id = None
+        self.result = None
+
+    def __eq__(self, other):
+        return ((self.job_name, self.execution_date) == 
+                (other.job_name, other.execution_date))
+
+    def __lt__(self, other):
+        if self.job_name < other.job_name:
+            return True 
+        if self.job_name > other.job_name:
+            return False
+        return self.execution_date > other.execution_date
 
     def __repr__(self):
         return "<TaskInstance(job_id={}, command={}, exe_ts={}, status={})>".format(
                 self.job_id, self.command, self.execute_ts, self.status)
 
-
+@functools.total_ordering
 class Job(Base):
     __tablename__ = "job"
 
@@ -101,6 +118,12 @@ class Job(Base):
         self.next_run_ts += timedelta(seconds=self.schedule_interval)
         session.commit()
         return celery_task.id
+
+    def __eq__(self, other):
+        return self.name == other.name 
+
+    def __lt__(self, other):
+        return self.name < other.name
 
     def __repr__(self):
         return "<Job(name={}, active={}, next_run={})>".format(
@@ -177,6 +200,11 @@ class ScheduleManager(object):
                     TaskInstance.task_id==tid).with_for_update().first()
                 if ti:
                     ti.state = celery_task.status 
+                    if celery_task.ready():
+                        if isinstance(celery_task.result, Exception):
+                            ti.result = celery_task.result.message 
+                        else:
+                            ti.result = celery_task.result
                 else:
                     # should never happen
                     logger.warning("Task {} does not exists in db".format(tid))
@@ -197,9 +225,8 @@ class RequestHandler:
         if isinstance(args, dict):
             # ImmutableMultiDict from flask web form 
             # convert to dict
-            args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
-            # args_dict = {k: v for k, v in args.items()}
-            print(args_dict)
+            # args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
+            args_dict = {k: v for k, v in args.items()}
             job = Job(**args_dict)
         else:
             job = Job(**vars(args))
@@ -209,7 +236,6 @@ class RequestHandler:
             logger.warning("Job with name {} already exist, edit the job".format(
                         job.name))
             for k, v in vars(job).items():
-                print(k,v)
                 setattr(ex_job, k, v)
         else:
             session.add(job)
@@ -254,35 +280,26 @@ class RequestHandler:
                 job_activity["inactive"].append(job)
         return job_activity
 
+    @classmethod
+    def info_running_tasks(cls, session=get_sql_session()):
+        running_tasks = session.query(TaskInstance).filter(
+                TaskInstance.state.in_(('PROGRESS', 'PENDING'))).order_by(
+                TaskInstance.job_id).all()
+        running_tasks = sorted(running_tasks)
+        return running_tasks
 
     @classmethod
     def info_job(cls, job_name, session=get_sql_session()):
         job = session.query(Job).filter(Job.name==job_name).first()
         tasks = session.query(TaskInstance).filter(
-                TaskInstance.job_id==job.id).order_by(
-                TaskInstance.execution_date.desc()).all()
+                TaskInstance.job_id==job.id).all()
+        tasks = sorted(tasks)
         return job, tasks
 
     @classmethod
-    def info_task_by_job(cls, job_name):
-        redis_conn = get_redis_conn()
-        all_tasks = redis_conn.keys(Task.root + job_name + "*")
-        # categorize by status
-        task_status = {"pending": [],
-                "progress": [],
-                "fail": [],
-                "success": []}
-        for task_key in all_tasks:
-            status = redis_conn.hget(task_key, 'status')
-            if status == 'PENDING':
-                task_status['pending'].append(task_key.strip(Task.root))
-            elif status == "PROGRESS":
-                task_status['progress'].append(task_key.strip(Task.root))
-            elif status == "SUCCESS":
-                task_status['success'].append(task_key.strip(Task.root))
-            else:
-                task_status['fail'].append(task_key.strip(Task.root))
-        return task_status
+    def check_task_stdout(cls, task_id, session=get_sql_session()):
+        task = session.query(TaskInstance).filter(TaskInstance.id==task_id).first()
+        return task
 
     @classmethod
     def add_tag_to_job(cls, args):

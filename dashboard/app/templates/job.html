@@ -1,33 +1,54 @@
 {% extends "base.html" %}
 
 {% block page_content %}
-<div class="container">
-    <div><h1>Job Info: {{job.name}}</h1><div>
-    <p> 
-        Timezone: {{ job.timezone }} <br>
-    	Command: {{ job.command }} <br>
-    	Next Run UTC: {{ job.next_run_ts }} <br>
-    </p>
+<div class="container-fluid">
+		<div class="row content">
+			<div class="col-sm-6">
+				<h2>Job Info: {{job.name}}</h2>
+					<div class="form-group">
+					  <label for="sel1">Action:</label>
+					  <select class="form-control" id="sel1">
+					    <option>Schedule Task Now</option>
+					    <option>add tags</option>
+					  </select>
+					</div>
+				<hr>
+				<p> 
+						Timezone: {{ job.timezone }} <br>
+						Command: {{ job.command }} <br>
+						Interval: {{ job.schedule_interval }} seconds<br>
+						Next Run UTC: {{ job.next_run_ts }} <br>
+				</p>
+			</div>
 
-    <script>
-    function statusColor() {
-        var element = document.getElementById("state");
-        if (element.innerHTML.contains("SUCCESS"))
-            element.style.color = "green";
-        else
-            element.style.color = "red";
-    }
+		<div class="col-sm-6">
+			<script>
+			function statusColor() {
+					var elements = document.getElementsByClassName("state");
+					for (i = 0; i < elements.length; ++i){
+							var state = elements[i].innerHTML
+							if (state == "SUCCESS")
+									elements[i].style.color = "green";
+							else if (state == "PENDING")
+									elements[i].style.color = "cyan";
+							else
+									elements[i].style.color = "red";
+					}
+			}
+			</script>
 
-    </script>
+			<h2>Recent tasks: </h2>
+			<hr>
+			{% for task in tasks %}
+			<p>
+					Execution Time: {{task.execution_date}}  Status: <a href="{{ url_for('main.info_task', task_id=task.id ) }}"><span class="state">{{task.state}}</span></a><br>
+					<script>statusColor();</script>
+			</p>
+			{% endfor %}
 
-    <hr>
-    <h2>All executed tasks in time order: </h2>
-    {% for task in tasks %}
-    <p id="state">
-        Execution Time: {{task.execution_date}}  Status: {{task.state}}<br>
-        <script>statusColor();</script>
-    </p>
-    {% endfor %}
+		</div>
+
+	</div>
 </div>
 
 {% endblock %}

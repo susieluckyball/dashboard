@@ -2,6 +2,15 @@
 
 {% block title %}
 Dashboard
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
 {% endblock %}
 
 {% block head %}
@@ -36,9 +45,9 @@ Dashboard
         {{ message }}
     </div>
     {% endfor %}
-
     {% block page_content %}{% endblock %}
 </div>
+
 <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 <script src="{{ url_for('static', filename='bootstrap-tagsinput.min.js')}}">
 {% endblock %}
