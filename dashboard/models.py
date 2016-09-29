@@ -11,7 +11,7 @@ from sqlalchemy import func, or_, and_
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import reconstructor, relationship, synonym
 
-from celery_worker import execute_command
+from dashboard.celery_worker import execute_command
 
 from dashboard.db import get_redis_conn, get_sql_session, engine
 from dashboard.utils import convert_to_utc
@@ -80,7 +80,7 @@ class Job(Base):
     next_run_ts = Column(DateTime)
 
     def __init__(self, name, timezone, start_dt=None, end_dt=None, 
-                active=True, schedule_interval=60*60*24, 
+                active=True, schedule_interval=None, 
                 operator='bash', command='sleep 10', 
                 next_run_ts=None, **kwargs):
         self.name = name
@@ -98,7 +98,10 @@ class Job(Base):
             self.end_dt = convert_to_utc(end_dt, timezone)
 
         self.active = active
-        self.schedule_interval = int(schedule_interval)
+        if schedule_interval is None or schedule_interval == "":
+            self.schedule_interval = 60 * 60 * 24 # default daily job
+        else:
+            self.schedule_interval = int(schedule_interval)
         self.operator = operator
         self.command = command 
         if start_dt is not None:
@@ -106,16 +109,22 @@ class Job(Base):
         else:
             self.next_run_ts = next_run_ts or datetime.utcnow()
 
-    def schedule_task(self, session):
+    def schedule_task(self, session, force_run=False):
+        if force_run:
+            orig_next_run = self.next_run_ts
+            self.next_run_ts = datetime.utcnow()
         if datetime.utcnow() < self.next_run_ts:
             return None
         task = TaskInstance(job=self)
-        logger.info("schedule task for job {} at utc {}".format(self.name, self.next_run_ts))
         celery_task = execute_command.apply_async(args=[task.command])
         task.task_id = celery_task.id 
         session.add(task)
-
-        self.next_run_ts += timedelta(seconds=self.schedule_interval)
+        if not force_run:
+            logger.info("schedule task for job {} at utc {}".format(self.name, self.next_run_ts))
+            self.next_run_ts += timedelta(seconds=self.schedule_interval)
+        else:
+            logger.info("schedule task for job {} at utc {}".format(self.name, datetime.utcnow()))
+            self.next_run_ts = orig_next_run
         session.commit()
         return celery_task.id
 
@@ -242,21 +251,25 @@ class RequestHandler:
         session.commit()
 
     @classmethod
-    def deactivate_job(cls, args, session=get_sql_session()):
+    def deactivate_job(cls, job_name, session=get_sql_session()):
         # set the job instance inactive
         # remove from jobs_bag
         job = session.query(Job).filter(
-                Job.name==args.name).with_for_update().first()
+                Job.name==job_name).with_for_update().first()
 
         if job:
             if job.active:
                 logger.debug("deactivate job: {}".format(str(job)))
                 job.active = False
                 session.commit()
+                return True
             else:
-                logger.debug("Job {} is already inactive".format(args.name))
+                msg = "Job {} is already inactive".format(job_name)
+                logger.debug(msg)
         else:
-            logger.warning("Job with name {} does not exist".format(args.name))
+            msg = "Job with name {} does not exist".format(job_name)
+            logger.warning()
+        return msg
 
     @classmethod
     def clear_redis(cls):
@@ -291,10 +304,12 @@ class RequestHandler:
     @classmethod
     def info_job(cls, job_name, session=get_sql_session()):
         job = session.query(Job).filter(Job.name==job_name).first()
-        tasks = session.query(TaskInstance).filter(
-                TaskInstance.job_id==job.id).all()
-        tasks = sorted(tasks)
-        return job, tasks
+        if job:
+            tasks = session.query(TaskInstance).filter(
+                    TaskInstance.job_id==job.id).all()
+            tasks = sorted(tasks)
+            return job, tasks
+        return None, None
 
     @classmethod
     def check_task_stdout(cls, task_id, session=get_sql_session()):
@@ -306,15 +321,20 @@ class RequestHandler:
         raise NotImplementedError
 
     @classmethod
-    def remove_job(cls, args):
-        # remove from jobs 
-        # potentially remove from jobs_bag
-        raise NotImplementedError
+    def remove_job(cls, job_name, session=get_sql_session()):
+        # remove from job table
+        job = session.query(Job).filter(Job.name==job_name).first()
+        session.delete(job)
+        session.commit()
 
     @classmethod
-    def force_schedule_for_job(cls):
+    def force_schedule_for_job(cls, job_name, session=get_sql_session()):
         # update jobs_bag for the job
-        raise NotImplementedError
+        job = session.query(Job).filter(Job.name==job_name).first()
+        if job:
+            task_id = job.schedule_task(session, force_run=True)
+            return task_id 
+        return None
 
     @classmethod
     def get_task_status(cls):

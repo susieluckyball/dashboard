@@ -37,6 +37,7 @@
 			<hr>
 				{% for task in running_tasks %}
 				<p>
+					{{ task.job_name }}
 					{{ task.execution_date }}
 					{{ task.state }}
 				</p>

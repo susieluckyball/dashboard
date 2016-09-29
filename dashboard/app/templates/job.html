@@ -5,13 +5,6 @@
 		<div class="row content">
 			<div class="col-sm-6">
 				<h2>Job Info: {{job.name}}</h2>
-					<div class="form-group">
-					  <label for="sel1">Action:</label>
-					  <select class="form-control" id="sel1">
-					    <option>Schedule Task Now</option>
-					    <option>add tags</option>
-					  </select>
-					</div>
 				<hr>
 				<p> 
 						Timezone: {{ job.timezone }} <br>
@@ -19,6 +12,44 @@
 						Interval: {{ job.schedule_interval }} seconds<br>
 						Next Run UTC: {{ job.next_run_ts }} <br>
 				</p>
+
+				<form>
+
+					<div class="form-group"> <!-- Radio group !-->
+						<label class="control-label">Edit</label>
+						<div class="radio">
+						  <label>
+							<input type="radio" name="action" value="run">
+							schedule task now
+						  </label>
+						</div>
+						<div class="radio">
+						  <label>
+							<input type="radio"  name="action" value="tag">
+							add tags
+						  </label>
+						</div>
+						<div class="radio">
+						  <label>
+							<input type="radio"  name="action" value="deactivate">
+							deactivate job
+						  </label>
+						</div>
+						<div class="radio">
+						  <label>
+							<input type="radio"  name="action" value="delete">
+							delete job
+						  </label>
+						</div>
+					</div>		
+
+					<div class="form-group"> <!-- Submit button !-->
+						<button class="btn btn-primary " name="submit" type="submit">Submit</button>
+					</div>
+					
+				</form>
+				
+				
 			</div>
 
 		<div class="col-sm-6">
