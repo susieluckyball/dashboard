@@ -4,47 +4,18 @@
 
 <div class="container">
     <div class="page-header">
-        <h1>Add/Edit Job</h1>
+        {% if modify %}
+            <span style="font-family:Georgia; color:#ff9900"><h1>Edit Job {{form.name.description}}</h1></span>
+        {% else %}
+            <span style="font-family:Georgia; color:#ff9900"><h1>Add New Job</h1></span>
+        {% endif %}
     </div>
     <form id='editjob' action="" method="post" name='job'>
-    {{ form.hidden_tag() }}
-    {{ form.csrf_token }}
-    <p>
-        {{ form.name.label }}<br>
-        {{ form.name }}<br>
-    </p>
-    <p>
-        {{ form.timezone.label }}<br>
-        {{ form.timezone }}<br>
-    </p>
-    <p>
-        {{ form.start_dt.label }}<br>
-        {{ form.start_dt }}<br>
-    </p>
-
-    <p>
-        {{ form.end_dt.label }}<br>
-        {{ form.end_dt }}<br>
-    </p>
-
-    <p>
-        {{ form.schedule_interval.label }}<br>
-        {{ form.schedule_interval }}<br>
-    </p>
-    <p>
-        {{ form.operator.label }}<br>
-        {{ form.operator }}<br>
-    </p>
-    <p>
-        {{ form.tags.label }}<br>
-        {{ form.tags}}<br>
-    </p>
-    <p>
-        {{ form.command.label }}<br>
-        {{ form.command(rows='5', cols='100') }}<br>
-    </p>
-
-    <p><input type=submit id="submit_job" value='Submit'></p>
+        {% import 'forms.html' as forms %}
+        {{ form.hidden_tag() }}
+        {% for field in form %}
+        {{ forms.render_field(field) }}
+        {% endfor %}
     </form>
 
 </div>

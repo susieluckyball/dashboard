@@ -4,7 +4,13 @@
 <div class="container-fluid">
 		<div class="row content">
 			<div class="col-sm-6">
-				<h2>Job Info: {{job.name}}</h2>
+				<span style="font-family:Georgia;color:#ff9900"><h2>Job Info: {{job.name}}</h2></span>
+				<p>
+						tags: 
+						{% for t in tags %}
+						<span class="tag tag-default"><a href="/">{{ t }}</a></span>
+						{% endfor %}
+				</p>
 				<hr>
 				<p> 
 						Timezone: {{ job.timezone }} <br>
@@ -12,35 +18,34 @@
 						Interval: {{ job.schedule_interval }} seconds<br>
 						Next Run UTC: {{ job.next_run_ts }} <br>
 				</p>
-
 				<form>
-
-					<div class="form-group"> <!-- Radio group !-->
-						<label class="control-label">Edit</label>
-						<div class="radio">
-						  <label>
-							<input type="radio" name="action" value="run">
-							schedule task now
-						  </label>
-						</div>
-						<div class="radio">
-						  <label>
-							<input type="radio"  name="action" value="tag">
-							add tags
-						  </label>
-						</div>
-						<div class="radio">
-						  <label>
-							<input type="radio"  name="action" value="deactivate">
-							deactivate job
-						  </label>
-						</div>
-						<div class="radio">
-						  <label>
-							<input type="radio"  name="action" value="delete">
-							delete job
-						  </label>
-						</div>
+				<hr>
+				<div class="form-group"> <!-- Radio group !-->
+					<label class="control-label">Actions</label>
+					<div class="radio">
+					  <label>
+						<input type="radio" name="action" value="run">
+						schedule task now
+					  </label>
+					</div>
+					<div class="radio">
+					  <label>
+						<input type="radio"  name="action" value="edit">
+						edit job
+					  </label>
+					</div>
+					<div class="radio">
+					  <label>
+						<input type="radio"  name="action" value="deactivate">
+						deactivate job
+					  </label>
+					</div>
+					<div class="radio">
+					  <label>
+						<input type="radio"  name="action" value="delete">
+						delete job
+					  </label>
+					</div>
 					</div>		
 
 					<div class="form-group"> <!-- Submit button !-->
@@ -80,6 +85,7 @@
 		</div>
 
 	</div>
+
 </div>
 
 {% endblock %}

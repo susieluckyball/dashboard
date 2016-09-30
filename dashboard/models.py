@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
 import functools
 import logging
@@ -138,6 +139,32 @@ class Job(Base):
         return "<Job(name={}, active={}, next_run={})>".format(
             self.name, self.active, self.next_run_ts)
 
+
+@functools.total_ordering
+class Tag(Base):
+    __tablename__ = "tag"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_name = Column(String(100))
+    name = Column(String(100))
+
+    def __init__(self, tag_name, job_name):
+        self.name = tag_name
+        self.job_name = job_name
+
+    def __eq__(self, other):
+        return ((self.name, self.job_name) == 
+            (other.name, self.job_name))
+
+    def __lt__(self, other):
+        return ((self.name, self.job_name) < 
+                (self.name, self.job_name))
+
+    def __repr__(self):
+        return "<Tag(job={}, tag={})>".format(self.job_name, self.name)
+
+
+
 Base.metadata.create_all(engine)
 
 
@@ -229,25 +256,51 @@ class ScheduleManager(object):
 class RequestHandler:
     """ This is the handlers that takes requests from web/cli """
     @classmethod
-    def add_job(cls, args, session=get_sql_session()):
-        # create a job instance and add to redis 
-        if isinstance(args, dict):
-            # ImmutableMultiDict from flask web form 
-            # convert to dict
-            # args_dict = {k.encode('ascii'): v.encode('ascii') for k, v in args.items()}
-            args_dict = {k: v for k, v in args.items()}
-            job = Job(**args_dict)
-        else:
-            job = Job(**vars(args))
-        logger.info("Add job {} into db".format(str(job)))
-        ex_job = session.query(Job).filter_by(name=job.name).first()
+    def add_job(cls, job_args, tags, session=get_sql_session()):
+        # create a job instance
+        ex_job = session.query(Job).filter(
+                Job.name==job_args['name']).with_for_update().first() 
+        ex_tags = session.query(Tag).filter(
+                Tag.job_name==job_args['name']).with_for_update().all()
         if ex_job:
             logger.warning("Job with name {} already exist, edit the job".format(
-                        job.name))
-            for k, v in vars(job).items():
+                        job_args["name"]))  
+            for k, v in job_args.items():
                 setattr(ex_job, k, v)
+            new_tag_names = set(tags)
+            # modify tags
+            # delete old tags
+            for ex_tag in ex_tags:
+                if ex_tag.name not in tags:
+                    session.delete(ex_tag)
+                else:
+                    new_tag_names.remove(ex_tag.name)
+            # add new tags
+            tag_instances = [Tag(t, job_args["name"]) for t in new_tag_names]
         else:
+            job = Job(**job_args)
+            tag_instances = [Tag(t, job_args["name"]) for t in tags]
             session.add(job)
+        for ti in tag_instances:
+            session.add(ti)
+        session.commit()
+
+        # job = Job(**job_args)
+        # tag_instances = [Tag(t, job_args["name"]) for t in tags]
+        # logger.info("Add job {} into db".format(str(job)))
+
+
+        # ex_job = session.query(Job, Tag).filter_by(Job.name=job.name).first()
+        # if ex_job:
+        #     logger.warning("Job with name {} already exist, edit the job".format(
+        #                 job.name))
+        #     for k, v in vars(job).items():
+        #         setattr(ex_job, k, v)
+        # else:
+        #     session.add(job)
+        session.add(job)
+        for ti in tag_instances:
+            session.add(ti)
         session.commit()
 
     @classmethod
@@ -281,17 +334,17 @@ class RequestHandler:
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
 
-    @classmethod 
-    def info_all_jobs(cls, session=get_sql_session()):
-        all_jobs = session.query(Job).all()
-        job_activity = {"active": [],
-            "inactive": []}
-        for job in all_jobs:
-            if job.active:
-                job_activity["active"].append(job)
-            else:
-                job_activity["inactive"].append(job)
-        return job_activity
+
+    @classmethod
+    def jobs_by_tag(cls, session=get_sql_session(), only_active=True):
+        tj = session.query(Tag, Job).filter(Job.name==Tag.job_name).all()
+        tags_dict = defaultdict(list)
+        for tag, job in tj:
+            if only_active and not job.active:
+                pass
+            tags_dict[tag.name].append(job)
+        return tags_dict
+
 
     @classmethod
     def info_running_tasks(cls, session=get_sql_session()):
@@ -305,11 +358,14 @@ class RequestHandler:
     def info_job(cls, job_name, session=get_sql_session()):
         job = session.query(Job).filter(Job.name==job_name).first()
         if job:
+            tags = session.query(Tag.name).filter(
+                    Tag.job_name==job_name).filter().all()
+            tags = [t[0] for t in tags]
             tasks = session.query(TaskInstance).filter(
                     TaskInstance.job_id==job.id).all()
             tasks = sorted(tasks)
-            return job, tasks
-        return None, None
+            return job, tags, tasks
+        return None, None, None
 
     @classmethod
     def check_task_stdout(cls, task_id, session=get_sql_session()):

@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 
+{% block head %}
+{{super()}}
+<meta http-equiv="refresh" content="60">
+{% endblock %}
+
 {% block page_content %}
 
 <div class="jumbotron text-center">
@@ -11,25 +16,30 @@
 		<div class="col-sm-8">
 			<h2 class="text-success"> All Active Jobs </h2>
 			<hr>
-			<table class="table table-hover table-sm">
-			<thead>
-				<tr>
-					<th>Job Name</th>
-					<th>Timezone</th>
-					<th>Command</th>
-					<th>Next Run UTC</th>
-				</tr>
-			</thead>
-			<tbody>
-			{% for job in active_jobs %}
-			 <tr>
-				<td><a href="{{ url_for('main.info_job', job_name=job.name ) }}">{{ job.name }}</a></td>
+			{% for (tag, active_jobs) in active_jobs_by_tag.items() %}
+			<h3 class="text-info">{{tag}}</h3>
+			<hr>
+				<table class="table table-hover table-sm">
+				<thead>
+					<tr>
+						<th>Job Name</th>
+						<th>Timezone</th>
+						<th>Command</th>
+						<th>Next Run UTC</th>
+					</tr>
+				</thead>
+				<tbody>
+				{% for job in active_jobs %}
+				 <tr>
+					<td><a href="{{ url_for('main.info_job', job_name=job.name ) }}">{{ job.name }}</a></td>
 					<td>{{ job.timezone }}</td>
 					<td>{{ job.command }} </td>
 					<td>{{ job.next_run_ts }}</td> 
 				</tr>
+				{% endfor %}
+				</tbody>
+				</table>
 			{% endfor %}
-		</table>
 		</div>
 
 		<div class="col-sm-4 sidenav">
