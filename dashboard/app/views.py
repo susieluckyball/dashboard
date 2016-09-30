@@ -6,7 +6,6 @@ from wtforms.validators import DataRequired
 from app import main
 from models import RequestHandler
 
-
 class JobForm(Form):
     name = TextField('Name',  validators=[DataRequired()])
     timezone = SelectField('Timezone', coerce=str, choices=[("US/Eastern","US/Eastern"), 
@@ -17,6 +16,7 @@ class JobForm(Form):
     schedule_interval = TextField('Run Interval (seconds)')
     operator = SelectField('Operator', coerce=str, choices=[("bash", "Bash"),
             ("python", "Python"), ("stored_proc", "Stored Procedure")])
+    tags = TextField('Tags', render_kw={"data-role":"tagsinput"})
     command = TextAreaField('Command', validators=[DataRequired()])
     # placeholder should add tags
     submit = SubmitField('submit')
@@ -36,6 +36,7 @@ def add_job():
     form = JobForm()
     if request.method == 'POST':
         if form.validate():
+            flash(request.form["tags"])
             flash("Job create request for job name {}".format(request.form["name"]), "success")
             RequestHandler.add_job(request.form)
             return redirect(url_for('main.index'))

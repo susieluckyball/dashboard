@@ -211,7 +211,7 @@ class ScheduleManager(object):
                     ti.state = celery_task.status 
                     if celery_task.ready():
                         if isinstance(celery_task.result, Exception):
-                            ti.result = celery_task.result.message 
+                            ti.result = str(celery_task.result)
                         else:
                             ti.result = celery_task.result
                 else:
