@@ -16,7 +16,7 @@ class JobForm(Form):
     schedule_interval = TextField('Run Interval (seconds)')
     operator = SelectField('Operator', coerce=str, choices=[("bash", "Bash"),
             ("python", "Python"), ("stored_proc", "Stored Procedure")])
-    tags = TextField('Tags', render_kw={"data-role":"tagsinput"})
+    tags = TextField('Tags', default='')
     command = TextAreaField('Command', validators=[DataRequired()],
                 render_kw={"rows":5, "cols":80})
     # placeholder should add tags
@@ -27,9 +27,9 @@ class JobForm(Form):
             if field.type in ('CSRFTokenField', 'HiddenField'):
                 continue
             if field.name not in ('tags', 'submit'):
-                setattr(field, "description", getattr(job, field.name))
+                setattr(field, "data", getattr(job, field.name))
             elif field.name == 'tags':
-                field.tags = tags
+                setattr(field, "data", ','.join(tags))
 
 @main.route('/', methods=['GET', 'POST'])
 @main.route('/index', methods=['GET', 'POST'])

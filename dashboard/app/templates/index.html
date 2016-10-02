@@ -26,6 +26,7 @@
 						<th>Timezone</th>
 						<th>Command</th>
 						<th>Next Run UTC</th>
+						<th></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -35,6 +36,15 @@
 					<td>{{ job.timezone }}</td>
 					<td>{{ job.command }} </td>
 					<td>{{ job.next_run_ts }}</td> 
+					<td class="dropdown">
+				        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
+				        <ul class="dropdown-menu">
+			          		<li><a href="#">Schedule Now</a></li>
+							<li><a href="#">Edit</a></li>
+							<li><a href="#">Deactivate</a></li>
+							<li><a href="#">Delete</a></li>
+				       	</ul>
+				    </td> 
 				</tr>
 				{% endfor %}
 				</tbody>

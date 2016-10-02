@@ -1,25 +1,31 @@
 {% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
 
 {% block page_content %}
 
 <div class="container">
     <div class="page-header">
         {% if modify %}
-            <span style="font-family:Georgia; color:#ff9900"><h1>Edit Job {{form.name.description}}</h1></span>
+            <h1>Edit Job {{form.name.description}}</h1></span>
         {% else %}
-            <span style="font-family:Georgia; color:#ff9900"><h1>Add New Job</h1></span>
+            <h1>Add New Job</h1></span>
         {% endif %}
     </div>
     <form id='editjob' action="" method="post" name='job'>
-        {% import 'forms.html' as forms %}
         {{ form.hidden_tag() }}
-        {% for field in form %}
-        {{ forms.render_field(field) }}
-        {% endfor %}
+        {{ wtf.form_errors(form, hiddens="only") }}
+        {{ wtf.form_field(form.name) }}
+        {{ wtf.form_field(form.timezone) }}
+        {{ wtf.form_field(form.start_dt) }}
+        {{ wtf.form_field(form.end_dt) }}
+        {{ wtf.form_field(form.schedule_interval) }}
+        {{ wtf.form_field(form.operator) }}
+        <div class="form-group "><label class="control-label" for="tags">Tags</label><br>
+            <input  data-role="tagsinput" id="tags" name="tags" type="text" value='{{ form.tags.data }}' autocomplete="off">
+        </div>
+        {{ wtf.form_field(form.command) }}
+        {{ wtf.form_field(form.submit) }}
     </form>
-
 </div>
 
-<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
-<script src="{{ url_for('static', filename='bootstrap-tagsinput.min.js')}}">
 {% endblock %}

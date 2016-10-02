@@ -4,11 +4,10 @@
 <div class="container-fluid">
 		<div class="row content">
 			<div class="col-sm-6">
-				<span style="font-family:Georgia;color:#ff9900"><h2>Job Info: {{job.name}}</h2></span>
 				<p>
 						tags: 
 						{% for t in tags %}
-						<span class="tag tag-default"><a href="/">{{ t }}</a></span>
+						<button type="button" class="btn btn-info btn-xs">{{ t }}</button>
 						{% endfor %}
 				</p>
 				<hr>
