@@ -3,6 +3,13 @@
 {% block head %}
 {{super()}}
 <meta http-equiv="refresh" content="60">
+<script src="https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap.min.js"></script>
+<script>
+$(document).ready(function() {
+  $('#sortable').dataTable();
+});
+</script>
 {% endblock %}
 
 {% block page_content %}
@@ -19,7 +26,7 @@
 			{% for (tag, active_jobs) in active_jobs_by_tag.items() %}
 			<h3 class="text-info">{{tag}}</h3>
 			<hr>
-				<table class="table table-hover table-sm">
+				<table id="sortable" class="table table-hover table-sm">
 				<thead>
 					<tr>
 						<th>Job Name</th>
@@ -63,7 +70,7 @@
 				</p>
 				{% endfor %}
 		</div>
-
+	</div>
 </div>
 
 {% endblock %}
