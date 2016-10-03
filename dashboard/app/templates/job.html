@@ -3,71 +3,20 @@
 {% block page_content %}
 <div class="container-fluid">
 	<div class="row content">
-		<div class="col-sm-6">
-			<p>
-					tags: 
-					{% for t in tags %}
-					<button type="button" class="btn btn-info btn-xs">{{ t }}</button>
-					{% endfor %}
-			</p>
-			<hr>
-			<p> 
-					Timezone: {{ job.timezone }} <br>
-					Command: {{ job.command }} <br>
-					Interval: {{ job.schedule_interval }} seconds<br>
-					Next Run UTC: {{ job.next_run_ts }} <br>
-			</p>
-			<form>
-			<hr>
-			<div class="form-group"> <!-- Radio group !-->
-				<label class="control-label">Actions</label>
-				<div class="radio">
-				  <label>
-					<input type="radio" name="action" value="run">
-					schedule task now
-				  </label>
-				</div>
-				<div class="radio">
-				  <label>
-					<input type="radio"  name="action" value="edit">
-					edit job
-				  </label>
-				</div>
-				<div class="radio">
-				  <label>
-					<input type="radio"  name="action" value="deactivate">
-					deactivate job
-				  </label>
-				</div>
-				<div class="radio">
-				  <label>
-					<input type="radio"  name="action" value="delete">
-					delete job
-				  </label>
-				</div>
-				</div>		
-
-				<div class="form-group"> <!-- Submit button !-->
-					<button class="btn btn-primary " name="submit" type="submit">Submit</button>
-				</div>
-				
-			</form>
-			
-			
-		</div>
-	</div>
-
-	<div class="col-sm-6">
+	
+	<div class="col-sm-8">
 		<script>
 		function statusColor() {
-				var elements = document.getElementsByClassName("state");
+				var elements = document.getElementsByClassName("show_result");
 				for (i = 0; i < elements.length; ++i){
 						var state = elements[i].innerHTML
-						if (state == "SUCCESS")
+						if (state == "FAILURE")
+								elements[i].style.color = "red";
+						else if (state == "PENDING" || state == "STARTED")
+								elements[i].style.color = "orange";
+						else if (state.startsWith('1')): 
 								elements[i].style.color = "green";
-						else if (state == "PENDING")
-								elements[i].style.color = "cyan";
-						else
+						else:
 								elements[i].style.color = "red";
 				}
 		}
@@ -77,12 +26,38 @@
 		<hr>
 		{% for task in tasks %}
 		<p>
-				Execution Time: {{task.execution_date}}  Status: <a href="{{ url_for('main.info_task', task_id=task.id ) }}"><span class="state">{{task.state}}</span></a><br>
+				{% if task.state == 'SUCCESS' %}
+				Execution Time: {{task.execution_date}}  Result: <span class="show_result">{{task.result}}</span><br>
+				{% else %}
+				Execution Time: {{task.execution_date}}  Status: <span class="show_result">{{task.state}}</span><br>
+				{% endif %}
 				<script>statusColor();</script>
 		</p>
 		{% endfor %}
 
 	</div>
+
+	<div class="col-sm-4">
+			<p>
+					<a href="{{ url_for('main.edit_job', job_name=job.name ) }}" type="button" class="btn btn-primary btn-md">edit {{job.name}}</a>
+			</p>
+			<hr>
+			<p> 
+					Timezone: {{ job.timezone }} <br>
+					Command: {{ job.command }} <br>
+					Interval: {{ job.schedule_interval }} seconds<br>
+					Next Run UTC: {{ job.next_run_ts }} <br>
+					tags:
+					{% for t in tags %}
+					<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-xs">{{ t }}</a>
+					{% endfor %}
+			</p>
+
+			
+	</div>
+	</div>
+
+
 </div>
 
 {% endblock %}

@@ -1,0 +1,58 @@
+
+{% extends "index.html" %}
+
+{% block page_content %}
+<div class="container-fluid">
+	<div class="page-header">
+		<h3>
+			Jobs for Tag 
+			<button type="button" class="btn btn-info">{{ tag_name }}</button>
+		</h3>
+	</div>
+
+	<p>
+		<a href='#'> placeholder: edit alert </a>
+	</p>
+
+	<div>
+		<table id="sortable" class="table table-hover table-sm">
+		<thead>
+			<tr>
+				<th>Activity</th>
+				<th>Job Name</th>
+				<th>Timezone</th>
+				<th>Command</th>
+				<th>Next Run UTC</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+		{% for job in jobs %}
+		 <tr>
+		 	{% if job.active %}
+		 	<td>Active</td> 
+		 	{% else %}
+		 	<td>Inactive</td>
+		 	{% endif %}
+			<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info' ) }}">{{ job.name }}</a></td>
+			<td>{{ job.timezone }}</td>
+			<td>{{ job.command }} </td>
+			<td>{{ job.next_run_ts }}</td> 
+			<td class="dropdown">
+		        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
+		        <ul class="dropdown-menu">
+	          		<li><a href="#">Schedule Now</a></li>
+					<li><a href="#">Edit</a></li>
+					<li><a href="#">Deactivate</a></li>
+					<li><a href="#">Delete</a></li>
+		       	</ul>
+		    </td> 
+		</tr>
+		{% endfor %}
+		</tbody>
+		</table>
+	</div>
+
+</div>
+
+{% endblock %}

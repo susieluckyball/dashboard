@@ -20,11 +20,14 @@ class CeleryConfig(object):
 worker = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL)
         # backend=CeleryConfig.CELERY_RESULT_BACKEND)
 worker.conf.update(CELERY_RESULT_BACKEND='redis')
+worker.conf.update(CELERY_TRACK_STARTED=True)
 
 @worker.task
 def execute_command(command):
     try:
-        cmd_lst = shlex.split(command)
+        # WARNING! 
+        # may not migrate to linux
+        cmd_lst = shlex.split(command, posix=False)
         return subprocess.check_output(cmd_lst, shell=True)
     except subprocess.CalledProcessError as e:
         raise RuntimeError('Celery command failed\n{}'.format(e))

@@ -2,7 +2,7 @@
 
 {% block head %}
 {{super()}}
-<meta http-equiv="refresh" content="60">
+<meta http-equiv="refresh" content="300">
 <script src="https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap.min.js"></script>
 <script>
@@ -21,42 +21,52 @@ $(document).ready(function() {
 <div class="container-fluid">
 	<div class="row content">
 		<div class="col-sm-8">
-			<h2 class="text-success"> All Active Jobs </h2>
+			<h4 class="text-success"> Tags </h4>
+			{% for t in all_tags %}
+			<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info">{{ t }}</a>
+			{% endfor %}			
 			<hr>
-			{% for (tag, active_jobs) in active_jobs_by_tag.items() %}
-			<h3 class="text-info">{{tag}}</h3>
-			<hr>
-				<table id="sortable" class="table table-hover table-sm">
-				<thead>
-					<tr>
-						<th>Job Name</th>
-						<th>Timezone</th>
-						<th>Command</th>
-						<th>Next Run UTC</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-				{% for job in active_jobs %}
-				 <tr>
-					<td><a href="{{ url_for('main.info_job', job_name=job.name ) }}">{{ job.name }}</a></td>
-					<td>{{ job.timezone }}</td>
-					<td>{{ job.command }} </td>
-					<td>{{ job.next_run_ts }}</td> 
-					<td class="dropdown">
-				        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
-				        <ul class="dropdown-menu">
-			          		<li><a href="#">Schedule Now</a></li>
-							<li><a href="#">Edit</a></li>
-							<li><a href="#">Deactivate</a></li>
-							<li><a href="#">Delete</a></li>
-				       	</ul>
-				    </td> 
+
+			<table id="sortable" class="table table-hover">
+			<thead>
+				<tr>
+					<th width="10%">Activity</th>
+					<th width="20%">Job Name</th>
+					<th width="10%">Timezone</th>
+					<th width="30%">Command</th>
+					<th width="15%">Next Run UTC</th>
+					<th width="15%"></th>
 				</tr>
-				{% endfor %}
-				</tbody>
-				</table>
+			</thead>
+			<tbody>
+			{% for job in all_active_jobs %}
+			 <tr>
+			 	{% if job.active %}
+		 		<td class="success">Active</td> 
+		 		{% else %}
+		 		<td class="warning">Inactive</td>
+		 		{% endif %}
+				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info') }}">{{ job.name }}</a></td>
+				<td>{{ job.timezone }}</td>
+				<td>{{ job.command }} </td>
+				<td>{{ job.next_run_ts }}</td> 
+				<td>
+			        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
+			        <ul class="dropdown-menu">
+		          		<li><a href="{{ url_for('main.info_job', job_name=job.name, action='run') }}">Schedule Now</a></li>
+						<li><a href="{{ url_for('main.edit_job', job_name=job.name ) }}">Edit</a></li>
+						{% if job.active %}
+							<li><a href="{{ url_for('main.info_job', job_name=job.name, action='deactivate') }}">Deactivate</a></li>
+						{% else %}
+							<li><a href="{{ url_for('main.info_job', job_name=job.name, action='activate') }}">Activate</a></li>
+						{% endif %}
+						<li><a href="{{ url_for('main.info_job', job_name=job.name, action='delete') }}">Delete</a></li>
+			       	</ul>
+			    </td> 
+			</tr>
 			{% endfor %}
+			</tbody>
+			</table>
 		</div>
 
 		<div class="col-sm-4 sidenav">
@@ -72,5 +82,6 @@ $(document).ready(function() {
 		</div>
 	</div>
 </div>
+
 
 {% endblock %}

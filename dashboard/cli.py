@@ -78,10 +78,10 @@ def main():
     add_job.add_argument("-t", "--tags", default=None)
     add_job.set_defaults(func=RequestHandler.add_job)
 
-    # deactivate job
-    deactivate_job = subparser.add_parser("deactivate")
-    deactivate_job.add_argument("-n", "--name", help='Name of the job to be deactivated')
-    deactivate_job.set_defaults(func=RequestHandler.deactivate_job)
+    # # deactivate job
+    # deactivate_job = subparser.add_parser("deactivate")
+    # deactivate_job.add_argument("-n", "--name", help='Name of the job to be deactivated')
+    # deactivate_job.set_defaults(func=RequestHandler.deactivate_job)
 
     # clear db 
     clear_db = subparser.add_parser("clear_db")

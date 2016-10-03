@@ -19,26 +19,29 @@ class JobForm(Form):
     tags = TextField('Tags', default='')
     command = TextAreaField('Command', validators=[DataRequired()],
                 render_kw={"rows":5, "cols":80})
-    # placeholder should add tags
     submit = SubmitField('submit', render_kw={"class":"btn btn-primary"})
 
-    def add_description(self, job, tags):
+    def add_placeholder(self, job, tags):
         for field in self:
             if field.type in ('CSRFTokenField', 'HiddenField'):
                 continue
             if field.name not in ('tags', 'submit'):
                 setattr(field, "data", getattr(job, field.name))
             elif field.name == 'tags':
-                setattr(field, "data", ','.join(tags))
+                setattr(field, "data", ','.join(tags))     
+
 
 @main.route('/', methods=['GET', 'POST'])
 @main.route('/index', methods=['GET', 'POST'])
 def index():
-    active_jobs_by_tag = RequestHandler.jobs_by_tag(only_active=True)
-    running_tasks = RequestHandler.info_running_tasks()
+    all_tags = [item[0] for item in RequestHandler.get_tags()]
+    all_active_jobs = RequestHandler.get_jobs(only_active=False)
+    running_tasks = RequestHandler.info_tasks(only_running=True)
     return render_template('index.html', 
-                active_jobs_by_tag=active_jobs_by_tag,
+                all_tags=all_tags,
+                all_active_jobs=all_active_jobs,
                 running_tasks=running_tasks)
+
 
 @main.route('/jobs/new', methods=['GET', 'POST'])
 def add_job():
@@ -46,47 +49,69 @@ def add_job():
     if request.method == 'POST':
         if form.validate():
             job_args = {k: v for k, v in request.form.items() if k != 'tags'}
-            tags = [t.strip() for t in form.tags.data.split(",")]
-            flash("Job create request for job name {}".format(request.form["name"]), "success")
-            RequestHandler.add_job(job_args, tags)
-            return redirect(url_for('main.index'))
+            if len(request.form['tags']) == 0:
+                tags = ["None"]
+            else:
+                tags = [t.strip() for t in request.form['tags'].split(",")]
+                
+            added = RequestHandler.add_job(job_args, tags)
+            if added:
+                flash("Job create request for job name {}".format(request.form["name"]), "success")
+                return redirect(url_for('main.index'))
+            else:
+                flash("Job with name {} exists, do you want to edit this job?".format(request.form["name"]), 
+                    "warning")
+                return redirect(url_for('main.edit_job', job_name=form.name.data))
         else:
             flash("Error: job name and command are required.")
-
     return render_template('add_job.html', form=form, modify=False)
+
 
 @main.route('/jobs/edit/<job_name>', methods=['GET', 'POST'])
 def edit_job(job_name):
     current_job, tags, _ = RequestHandler.info_job(job_name)
+    if current_job is None:
+        # must be a bug...
+        flash("Bug: job {} does not exist".format(job_name))
+        return jsonify({})
     form = JobForm()
-    form.add_description(current_job, tags)
+    form.add_placeholder(current_job, tags)
     if request.method == 'POST':
         if form.validate():
             job_args = {k: v for k, v in request.form.items() if k != 'tags'}
-            tags = [t.strip() for t in form.tags.data.split(",")]
-            flash("Job create request for job name {}".format(request.form["name"]), "success")
-            RequestHandler.add_job(job_args, tags)
+            if len(request.form['tags']) == 0:
+                tags = ["None"]
+            else:
+                tags = [t.strip() for t in request.form['tags'].split(",")]
+            if RequestHandler.edit_job(job_args, tags):
+                flash("Edited job {}".format(request.form['name']), "success")
             return redirect(url_for('main.index'))
         else:
             flash("Error: job name and command are required.")
     return render_template('add_job.html', form=form, modify=True)
 
 
-@main.route('/jobs/<job_name>', methods=['GET', 'POST'])
-def info_job(job_name):
-    action = request.args.get("action")
-    if action is None:
+@main.route('/jobs/<job_name>/<action>', methods=['GET', 'POST'])
+def info_job(job_name, action='info'):
+    if action == 'info':
         job, tags, tasks = RequestHandler.info_job(job_name)
-        tasks = tasks[:min(5, len(tasks))]
-        return render_template('job.html', job=job, tags=tags, tasks=tasks)
+        tasks = tasks[:min(10, len(tasks))]
+        return render_template('job.html', job=job, 
+                        tags=tags, tasks=tasks)
     elif action == 'run':
         flash("Force job {} to run now".format(job_name))
         celery_tid = RequestHandler.force_schedule_for_job(job_name)
         flash("Celery task id: {}".format(celery_tid))
     elif action == 'deactivate':
-        msg = RequestHandler.deactivate_job(job_name)
+        msg = RequestHandler.change_job_status(job_name, deactivate=True)
         if msg is True:
             flash("Deactivated job {}".format(job_name))
+        else:
+            flash(msg)
+    elif action == "activate":
+        msg = RequestHandler.change_job_status(job_name, deactivate=False)
+        if msg is True:
+            flash("Activated job {}".format(job_name))
         else:
             flash(msg)
     elif action == 'edit':
@@ -96,13 +121,17 @@ def info_job(job_name):
         RequestHandler.remove_job(job_name)
     return redirect(url_for('main.index'))
 
+@main.route('/tags/<tag_name>', methods=['GET', 'POST'])
+def info_tag(tag_name):
+    jobs = RequestHandler.get_jobs_by_tag(only_active=False, tag_name=tag_name)
+    return render_template('tag.html', tag_name=tag_name, jobs=jobs)
 
 
-@main.route('/jobs/tasks/<task_id>', methods=['GET'])
-def info_task(task_id):
-    task = RequestHandler.check_task_stdout(task_id)
-    if task is not None:
-        return jsonify({"output": task.result})
-    return jsonify({"Error": "cannot find the task..."})
+# @main.route('/jobs/tasks/<task_id>', methods=['GET'])
+# def info_task(task_id):
+#     task = RequestHandler.check_task_stdout(task_id)
+#     if task is not None:
+#         return jsonify({"output": task.result})
+#     return jsonify({"Error": "cannot find the task..."})
          
 
