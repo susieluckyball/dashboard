@@ -15,7 +15,7 @@ from sqlalchemy.orm import reconstructor, relationship, synonym
 from dashboard.celery_worker import execute_command
 
 from dashboard.db import get_redis_conn, get_sql_session, engine
-from dashboard.utils import convert_to_utc
+from dashboard.utils import convert_to_utc, convert_to_local
 
 Base = declarative_base()
 ID_LEN = 250
@@ -117,10 +117,6 @@ class Job(Base):
         if datetime.utcnow() < self.next_run_ts:
             return None
         task = TaskInstance(job=self)
-        print("=========")
-        print(task.command)
-        import shlex
-        print(shlex.split(task.command, posix=False))
         celery_task = execute_command.apply_async(args=[task.command])
         task.task_id = celery_task.id 
         session.add(task)
@@ -139,6 +135,11 @@ class Job(Base):
             self.short_command = self.command[:max_size] + "..."
         else:
             self.short_command = self.command
+
+    def get_local_run_time(self):
+        self.local_next_run =  convert_to_local(
+                self.next_run_ts, self.timezone)
+
 
     def __eq__(self, other):
         return self.name == other.name 
@@ -423,7 +424,11 @@ class RequestHandler:
         """ remove from job table """
         job = session.query(Job).filter(Job.name==job_name
                     ).with_for_update().first()
+        tags = session.query(Tag).filter(Tag.job_name==job_name
+                    ).with_for_update().all()
         session.delete(job)
+        for t in tags:
+            session.delete(t)
         session.commit()
 
     @classmethod

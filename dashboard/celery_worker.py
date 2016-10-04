@@ -19,8 +19,8 @@ class CeleryConfig(object):
 
 worker = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL)
         # backend=CeleryConfig.CELERY_RESULT_BACKEND)
-worker.conf.update(CELERY_RESULT_BACKEND='redis')
 worker.conf.update(CELERY_TRACK_STARTED=True)
+worker.conf.update(CELERY_RESULT_BACKEND='redis')
 
 @worker.task
 def execute_command(command):

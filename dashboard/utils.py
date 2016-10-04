@@ -5,6 +5,11 @@ def convert_to_utc(timestamp_str, timezone):
                 tz_localize(timezone).astimezone('UTC').\
                 replace(tzinfo=None)
 
+def convert_to_local(timestamp, timezone):
+	return pd.to_datetime(timestamp).\
+				tz_localize('UTC').astimezone(timezone).\
+				replace(tzinfo=None)
+
 class Singleton(type):
     _instances = {}
     def __call__(cls, *args, **kwargs):

@@ -1,52 +1,66 @@
-{% extends "base.html" %}
+{% extends "index.html" %}
 
 {% block page_content %}
 <div class="container-fluid">
+	<div class="page-header"><h2> {{ job.name }} <a href="{{ url_for('main.edit_job', job_name=job.name ) }}" type="button" class="btn btn-primary btn-md">edit {{job.name}}</a> </h2></div>
 	<div class="row content">
-	
-	<div class="col-sm-8">
-		<script>
-		function statusColor() {
-				var elements = document.getElementsByClassName("show_result");
-				for (i = 0; i < elements.length; ++i){
-						var state = elements[i].innerHTML
-						if (state == "FAILURE")
-								elements[i].style.color = "red";
-						else if (state == "PENDING" || state == "STARTED")
-								elements[i].style.color = "orange";
-						else if (state.startsWith('1')): 
-								elements[i].style.color = "green";
-						else:
-								elements[i].style.color = "red";
-				}
-		}
-		</script>
-
-		<h2>Recent tasks: </h2>
-		<hr>
-		{% for task in tasks %}
-		<p>
-				{% if task.state == 'SUCCESS' %}
-				Execution Time: {{task.execution_date}}  Result: <span class="show_result">{{task.result}}</span><br>
-				{% else %}
-				Execution Time: {{task.execution_date}}  Status: <span class="show_result">{{task.state}}</span><br>
-				{% endif %}
-				<script>statusColor();</script>
-		</p>
-		{% endfor %}
-
+	<div class="col-sm-7">
+		<table id="sortable" class="table table-hover is-breakable">
+			<thead>
+				<tr>
+					<th width='20%'>Execution Time</th>
+					<th width='80%'>Task Status/Out</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for task in tasks %}
+				<tr>
+					{% if task.state == 'SUCCESS' %}
+					<!-- This is hardcoded for datacheck output -->
+						{% if task.result.startswith('1') %}
+					<td class="success">{{ task.execution_date }}</td>
+					<td class="success">{{ task.result }}</td>
+						{% else %}
+					<td class="danger">{{ task.execution_date }}</td>
+					<td class="danger">{{ task.result }}</td>
+						{% endif %}
+					{% elif task.state in ("PENDING", "STARTED") %}
+					<td class="info">{{ task.execution_date }}</td>
+					<td class="info">{{ task.state }}</td>
+					{% else %}
+					<td class="warning">{{ task.execution_date }}</td>
+					<td class="warning">Task fail: {{ task.result }}</td>
+					{% endif %}
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
 	</div>
 
-	<div class="col-sm-4">
-			<p>
-					<a href="{{ url_for('main.edit_job', job_name=job.name ) }}" type="button" class="btn btn-primary btn-md">edit {{job.name}}</a>
-			</p>
-			<hr>
+	<div class="col-sm-5">
+
+			<table class="table table-hover is-breakable">
+			<tbody>
+				<tr>
+					<td>Timezone</td>
+					<td>{{ job.timezone }}</td>
+				</tr>
+				<tr>
+					<td>Command</td>
+					<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
+				</tr>
+				<tr>
+					<td>Run Interval</td>
+					<td> {{ job.schedule_interval }} </td>
+				</tr>
+				<tr>
+					<td>Next Run</td>
+					<td>{{ job.local_next_run }}</td> 
+				</tr>
+			</tbody>
+			</table>
+		
 			<p> <h4>
-					Timezone: {{ job.timezone }} <br>
-					Command: {{ job.command }} <br>
-					Interval: {{ job.schedule_interval }} seconds<br>
-					Next Run UTC: {{ job.next_run_ts }} <br>
 					tags:
 					{% for t in tags %}
 					<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>

@@ -55,9 +55,6 @@ div.talk-slides {
     vertical-align: middle;
 }
 
-div.table th {
-    width: auto !important;
-}
 
 .flask-pagedown-preview {
     margin-top: 10px;

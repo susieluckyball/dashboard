@@ -24,12 +24,12 @@
 			<table id="sortable" class="table table-hover is-breakable">
 			<thead>
 				<tr>
-					<th width="7%">Activity</th>
-					<th width="15%">Job Name</th>
+					<th width="10%">Activity</th>
+					<th width="13%">Job Name</th>
 					<th width="12%">Timezone</th>
-					<th width="30%">Command</th>
-					<th width="15%">Next Run UTC</th>
-					<th width="6%"></th>
+					<th width="40%">Command</th>
+					<th width="15%">Next Run</th>
+					<th width="20%"></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -43,7 +43,7 @@
 				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info') }}">{{ job.name }}</a></td>
 				<td>{{ job.timezone }}</td>
 				<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
-				<td>{{ job.next_run_ts }}</td> 
+				<td>{{ job.local_next_run }}</td> 
 				<td class="dropdown">
 			        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
 			        <ul class="dropdown-menu">

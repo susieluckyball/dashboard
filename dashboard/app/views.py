@@ -39,6 +39,7 @@ def index():
     running_tasks = RequestHandler.info_tasks(only_running=True)
     for job in all_active_jobs:
         job.initialize_shortcommand()
+        job.get_local_run_time()
     return render_template('index.html', 
                 all_tags=all_tags,
                 all_active_jobs=all_active_jobs,
@@ -52,7 +53,7 @@ def add_job():
         if form.validate():
             job_args = {k: v for k, v in request.form.items() if k != 'tags'}
             if len(request.form['tags']) == 0:
-                tags = ["None"]
+                tags = ["no-tag"]
             else:
                 tags = [t.strip() for t in request.form['tags'].split(",")]
                 
@@ -78,11 +79,13 @@ def edit_job(job_name):
         return jsonify({})
     form = JobForm()
     form.add_placeholder(current_job, tags)
+    form.name.render_kw = {'disabled': True}
     if request.method == 'POST':
         if form.validate():
             job_args = {k: v for k, v in request.form.items() if k != 'tags'}
+            job_args['name'] = current_job.name
             if len(request.form['tags']) == 0:
-                tags = ["None"]
+                tags = ["no-tag"]
             else:
                 tags = [t.strip() for t in request.form['tags'].split(",")]
             if RequestHandler.edit_job(job_args, tags):
@@ -97,13 +100,14 @@ def edit_job(job_name):
 def info_job(job_name, action='info'):
     if action == 'info':
         job, tags, tasks = RequestHandler.info_job(job_name)
+        job.initialize_shortcommand()
+        job.get_local_run_time()
         tasks = tasks[:min(10, len(tasks))]
         return render_template('job.html', job=job, 
                         tags=tags, tasks=tasks)
     elif action == 'run':
         flash("Force job {} to run now".format(job_name))
         celery_tid = RequestHandler.force_schedule_for_job(job_name)
-        flash("Celery task id: {}".format(celery_tid))
     elif action == 'deactivate':
         msg = RequestHandler.change_job_status(job_name, deactivate=True)
         if msg is True:
