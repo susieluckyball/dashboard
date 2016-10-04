@@ -37,6 +37,8 @@ def index():
     all_tags = [item[0] for item in RequestHandler.get_tags()]
     all_active_jobs = RequestHandler.get_jobs(only_active=False)
     running_tasks = RequestHandler.info_tasks(only_running=True)
+    for job in all_active_jobs:
+        job.initialize_shortcommand()
     return render_template('index.html', 
                 all_tags=all_tags,
                 all_active_jobs=all_active_jobs,

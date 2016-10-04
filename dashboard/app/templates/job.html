@@ -42,15 +42,16 @@
 					<a href="{{ url_for('main.edit_job', job_name=job.name ) }}" type="button" class="btn btn-primary btn-md">edit {{job.name}}</a>
 			</p>
 			<hr>
-			<p> 
+			<p> <h4>
 					Timezone: {{ job.timezone }} <br>
 					Command: {{ job.command }} <br>
 					Interval: {{ job.schedule_interval }} seconds<br>
 					Next Run UTC: {{ job.next_run_ts }} <br>
 					tags:
 					{% for t in tags %}
-					<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-xs">{{ t }}</a>
+					<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>
 					{% endfor %}
+				</h4>
 			</p>
 
 			

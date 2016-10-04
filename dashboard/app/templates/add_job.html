@@ -1,31 +1,44 @@
 {% extends "base.html" %}
 {% import "bootstrap/wtf.html" as wtf %}
 
-{% block page_content %}
+{% block styles %}
+{{super()}}
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/bootstrap-tagsinput.css') }}">
+{% endblock%}
 
-<div class="container">
-    <div class="page-header">
-        {% if modify %}
-            <h1>Edit Job {{form.name.description}}</h1></span>
-        {% else %}
-            <h1>Add New Job</h1></span>
-        {% endif %}
-    </div>
-    <form id='editjob' action="" method="post" name='job'>
-        {{ form.hidden_tag() }}
-        {{ wtf.form_errors(form, hiddens="only") }}
-        {{ wtf.form_field(form.name) }}
-        {{ wtf.form_field(form.timezone) }}
-        {{ wtf.form_field(form.start_dt) }}
-        {{ wtf.form_field(form.end_dt) }}
-        {{ wtf.form_field(form.schedule_interval) }}
-        {{ wtf.form_field(form.operator) }}
-        <div class="form-group "><label class="control-label" for="tags">Tags</label><br>
-            <input  data-role="tagsinput" id="tags" name="tags" type="text" value='{{ form.tags.data }}' autocomplete="off">
+{% block page_content %}
+<div class="container-fluid">
+    <div class="col-sm-3"></div>
+    <div class="col-sm-6">
+        <div class="page-header">
+            {% if modify %}
+                <h1>Edit Job {{form.name.description}}</h1></span>
+            {% else %}
+                <h1>Add New Job</h1></span>
+            {% endif %}
         </div>
-        {{ wtf.form_field(form.command) }}
-        {{ wtf.form_field(form.submit) }}
-    </form>
+        <form id='editjob' action="" method="post" name='job'>
+            {{ form.hidden_tag() }}
+            {{ wtf.form_errors(form, hiddens="only") }}
+            {{ wtf.form_field(form.name) }}
+            {{ wtf.form_field(form.timezone) }}
+            {{ wtf.form_field(form.start_dt) }}
+            {{ wtf.form_field(form.end_dt) }}
+            {{ wtf.form_field(form.schedule_interval) }}
+            {{ wtf.form_field(form.operator) }}
+            <div class="form-group "><label class="control-label" for="tags">Tags</label><br>
+                <input data-role="tagsinput" id="tags" name="tags" type="text" value='{{ form.tags.data }}' autocomplete="off">
+            </div>
+            {{ wtf.form_field(form.command) }}
+            {{ wtf.form_field(form.submit) }}
+        </form>
+    </div>
+    <div class="col-sm-3"></div>
 </div>
 
 {% endblock %}
+
+{% block scripts %}
+{{super()}}
+<script src="{{ url_for('static', filename='js/bootstrap-tagsinput.min.js') }}"></script>
+{%- endblock scripts %}

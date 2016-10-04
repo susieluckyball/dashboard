@@ -99,3 +99,21 @@ ul.comment-list li.comment:nth-child(even)
 .badge-red {
     background-color:#d44;
 }
+
+.is-breakable {
+  word-break: break-word;
+}
+@media (min-width: 1800px) {
+  .container {
+    width: 1570px;
+  }
+}
+@media (min-width: 2000px) {
+  .container {
+    width: 1870px;
+  }
+}
+
+.tooltip-inner {
+    max-width: 450px;
+}

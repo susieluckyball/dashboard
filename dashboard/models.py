@@ -104,7 +104,7 @@ class Job(Base):
         else:
             self.schedule_interval = int(schedule_interval)
         self.operator = operator
-        self.command = command 
+        self.command = command
         if start_dt is not None:
             self.next_run_ts = self.start_dt
         else:
@@ -132,6 +132,13 @@ class Job(Base):
             self.next_run_ts = orig_next_run
         session.commit()
         return celery_task.id
+
+    def initialize_shortcommand(self):
+        max_size = 57
+        if len(self.command) > max_size:
+            self.short_command = self.command[:max_size] + "..."
+        else:
+            self.short_command = self.command
 
     def __eq__(self, other):
         return self.name == other.name 
