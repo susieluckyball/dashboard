@@ -16,6 +16,21 @@ class Config:
     CELERY_BROKER_URL = 'redis://localhost:6379/0'
     CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
+    DB = {
+        "ENTERPRISE": "Driver={SQL Server Native Client 10.0};Server=SQLDEV01,1433;Database=Enterprise;Trusted_Connection=Yes;",
+        "REFERENCE": "Driver={SQL Server Native Client 10.0};Server=SQLDEV02,1633;Database=Reference;Trusted_Connection=Yes;",
+        "VENDORREF": "Driver={SQL Server Native Client 10.0};Server=SQLDEV02,1633;Database=Vendor;Trusted_Connection=Yes;",
+        "VENDOR": "Driver={SQL Server Native Client 10.0};Server=SQLDEV01,1433;Database=Vendor;Trusted_Connection=Yes;",
+        "VENDORQS": "Driver={SQL Server Native Client 10.0};Server=SQLDEV01,1433;Database=Vendor;Trusted_Connection=Yes;",
+        "STATARB": "Driver={SQL Server Native Client 10.0};Server=SQLDEV01,1433;Database=StatArb;Trusted_Connection=Yes;",
+        "LOANPERFORMANCE": "Driver={SQL Server Native Client 10.0};Server=DALSQL61,2928;Database=LoanPerformance;Trusted_Connection=Yes;",
+        "EMBS": "Driver={SQL Server Native Client 10.0};Server=SQLDEV01,1433;Database=Enterprise;Trusted_Connection=Yes;",
+        "EMBSHIST": "Driver={SQL Server Native Client 10.0};Server=SQLDEV01,1433;Database=Enterprise;Trusted_Connection=Yes;",
+        "VENDORSC": "Driver={SQL Server Native Client 10.0};Server=SQLDEV02,1633;Database=VendorSC;Trusted_Connection=Yes;"
+    }
+
+
+
     @staticmethod
     def init_app(app):
         pass
@@ -37,8 +52,19 @@ class TestingConfig(Config):
 # class ProductionConfig(Config):
 #     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
 #         'sqlite:///' + os.path.join(basedir, 'data.sqlite')
-
-#     @classmethod
+#     DB = {
+#         "ENTERPRISE": "Driver={SQL Server Native Client 10.0};Server=DALDATA1,1433;Database=Enterprise;Trusted_Connection=Yes;",
+#         "REFERENCE": "Driver={SQL Server Native Client 10.0};Server=DALDATA5,1633;Database=Reference;Trusted_Connection=Yes;",
+#         "VENDORREF": "Driver={SQL Server Native Client 10.0};Server=DALDATA5,1633;Database=Vendor;Trusted_Connection=Yes;",
+#         "VENDOR": "Driver={SQL Server Native Client 10.0};Server=DALDATA1,1433;Database=Vendor;Trusted_Connection=Yes;",
+#         "VENDORQS": "Driver={SQL Server Native Client 10.0};Server=DALDATA9,1433;Database=Vendor;Trusted_Connection=Yes;",
+#         "STATARB": "Driver={SQL Server Native Client 10.0};Server=DALDATA1,1433;Database=StatArb;Trusted_Connection=Yes;",
+#         "LOANPERFORMANCE": "Driver={SQL Server Native Client 10.0};Server=DALSCDATA1;Database=LoanPerformance;Trusted_Connection=Yes;",
+#         "EMBS": "Driver={SQL Server Native Client 10.0};Server=DALSCDATA1;Database=EMBS;Trusted_Connection=Yes;",
+#         "EMBSHIST": "Driver={SQL Server Native Client 10.0};Server=DALSCDATA1;Database=EMBSHIST;Trusted_Connection=Yes;",
+#         "VENDORSC": "Driver={SQL Server Native Client 10.0};Server=DALSCDATA1;Database=Vendor;Trusted_Connection=Yes;"
+#     }
+# #     @classmethod
 #     def init_app(cls, app):
 #         Config.init_app(app)
 

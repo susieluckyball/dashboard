@@ -31,3 +31,8 @@ def execute_command(command):
         return subprocess.check_output(cmd_lst, shell=True)
     except subprocess.CalledProcessError as e:
         raise RuntimeError('Celery command failed\n{}'.format(e))
+
+
+@worker.task
+def execute_func(func, args):
+    return func(args)

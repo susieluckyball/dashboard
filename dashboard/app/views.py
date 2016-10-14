@@ -1,9 +1,11 @@
 from flask import Flask, request, render_template, redirect, flash, url_for, jsonify, session
 from flask.ext.wtf import Form 
-from wtforms import TextField, SelectField, SubmitField, TextAreaField
-from wtforms.validators import DataRequired
+from flask_login import login_user, logout_user, login_required
+from wtforms import (BooleanField, PasswordField, SelectField, StringField, 
+                    SubmitField, TextAreaField, TextField)
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Required
 
-from app import main
+from app import main, auth, login_manager
 from models import RequestHandler
 
 class JobForm(Form):
@@ -15,7 +17,7 @@ class JobForm(Form):
     end_dt = TextField('End Datetime (default None)')
     schedule_interval = TextField('Run Interval (seconds)')
     operator = SelectField('Operator', coerce=str, choices=[("bash", "Bash"),
-            ("python", "Python"), ("stored_proc", "Stored Procedure")])
+            ("python", "Python"), ("sql", "SQL")])
     tags = TextField('Tags', default='')
     command = TextAreaField('Command', validators=[DataRequired()],
                 render_kw={"rows":5, "cols":80})
@@ -28,7 +30,24 @@ class JobForm(Form):
             if field.name not in ('tags', 'submit'):
                 setattr(field, "data", getattr(job, field.name))
             elif field.name == 'tags':
-                setattr(field, "data", ','.join(tags))     
+                setattr(field, "data", ','.join(tags))
+
+class LoginForm(Form):
+    email = StringField('Email', validators=[DataRequired(), Email()]) 
+    password = PasswordField('Password', validators=[DataRequired()]) 
+    remember_me = BooleanField('Keep me logged in')
+    submit = SubmitField('Log In')
+
+class RegistrationForm(Form):
+    email = StringField('Email', validators=[DataRequired(), Length(1, 64), Email()])
+    password = PasswordField('Password', validators=[DataRequired(), EqualTo('password2', message='Passwords must match.')])
+    password2 = PasswordField('Confirm password', validators=[DataRequired()])
+    submit = SubmitField('Register')
+
+    def validate_email(self, field):
+        # if User.query.filter_by(email=field.data).first():
+        if RequestHandler.get_user(email=field.data):
+            raise ValidationError('Email already registered.')
 
 
 @main.route('/', methods=['GET', 'POST'])
@@ -141,3 +160,44 @@ def info_tag(tag_name):
 #     return jsonify({"Error": "cannot find the task..."})
          
 
+
+@login_manager.user_loader
+def load_user(id):
+    return RequestHandler.get_user_by_id(id)
+
+
+@auth.route('/login', methods=['GET', 'POST'])
+def login():
+    # Here we use a class of some kind to represent and validate our
+    # client-side form data. For example, WTForms is a library that will
+    # handle this for us, and we use a custom LoginForm to validate.
+    form = LoginForm()
+    if form.validate_on_submit():
+        # Login and validate the user.
+        # user should be an instance of your `User` class
+        user = RequestHandler.get_user(form.email.data)
+        if user is not None and user.verify_password(form.password.data):
+            login_user(user, form.remember_me.data)
+            flash('Logged in as {}.'.format(user.email))
+            return redirect(request.args.get('next') or url_for('main.index'))
+        flash("Invalid username or password")
+    return render_template('auth/login.html', form=form)
+
+
+@auth.route('/register', methods=['GET', 'POST'])
+def register():
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        RequestHandler.register(email=form.email.data, 
+                            password=form.password.data)
+        flash('You can now login.')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/register.html', form=form)
+
+
+@auth.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out.')
+    return redirect(url_for('main.index'))

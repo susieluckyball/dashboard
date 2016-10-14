@@ -19,20 +19,28 @@ Dashboard
 {% endblock%}
 
 {% block navbar %}
+
+
 <div class="navbar navbar-default" role="navigation">
-    <div class="container">
-        <div class="navbar-header">
-            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
-                <span class="sr-only">Toggle navigation</span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </button>
-            <a class="navbar-brand" href="/" title="Data Dashboard">Home</a>
-            <a class="navbar-brand" href="/jobs/new">Add Job</a>
-        </div>
+  <div class="container">
+    <div class="navbar-header">
+        <a class="navbar-brand" href="/" title="Data Dashboard">Home</a>
     </div>
-</div>
+    <ul class="nav navbar-nav">
+        <li><a href="/jobs/new">Add Job</a></li>
+    </ul>
+    <ul class="nav navbar-nav navbar-right">
+      {% if current_user.is_authenticated() %}
+      <li><a href="#"><span class="glyphicon glyphicon-user"></span> {{ current_user.email }} </a></li>
+      <li><a href="{{ url_for('auth.logout') }}"><span class="glyphicon glyphicon-log-in"></span> Sign Out </a></li>
+      {% else %}
+      <li><a href="{{ url_for('auth.register') }}"><span class="glyphicon glyphicon-user"></span> Sign Up </a></li>
+      <li><a href="{{ url_for('auth.login') }}"><span class="glyphicon glyphicon-log-in"></span> Login </a></li>
+      {% endif %}
+    </ul>
+  </div>
+</div>        
+
 {% endblock %}
 
 

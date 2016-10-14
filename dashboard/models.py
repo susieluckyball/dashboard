@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
+
 import functools
 import logging
 import pandas as pd
@@ -11,10 +12,11 @@ from sqlalchemy import (
 from sqlalchemy import func, or_, and_
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import reconstructor, relationship, synonym
+from werkzeug.security import generate_password_hash, check_password_hash
 
-from dashboard.celery_worker import execute_command
-
-from dashboard.db import get_redis_conn, get_sql_session, engine
+# from dashboard.app import db
+from dashboard.celery_worker import execute_command, execute_func
+from dashboard.db import get_redis_conn, provide_session, engine#, run_query_on_sql_server
 from dashboard.utils import convert_to_utc, convert_to_local
 
 Base = declarative_base()
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 @functools.total_ordering
 class TaskInstance(Base):
-    __tablename__ = 'task_instance'
+    __tablename__ = 'task_instances'
     id = Column(Integer, primary_key=True, autoincrement=True)
     job_id = Column(Integer, nullable=False)
     job_name = Column(String(100), nullable=False)
@@ -66,7 +68,7 @@ class TaskInstance(Base):
 
 @functools.total_ordering
 class Job(Base):
-    __tablename__ = "job"
+    __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100))
@@ -154,10 +156,10 @@ class Job(Base):
 
 @functools.total_ordering
 class Tag(Base):
-    __tablename__ = "tag"
+    __tablename__ = "tags"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    job_name = Column(String(100))
+    job_name = Column(String(100), index=True)
     name = Column(String(100))
 
     def __init__(self, tag_name, job_name):
@@ -176,6 +178,38 @@ class Tag(Base):
         return "<Tag(job={}, tag={})>".format(self.job_name, self.name)
 
 
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer , primary_key=True, autoincrement=True)
+    email = Column(String(50), unique=True, index=True)
+    password_hash = Column(String(128))
+    
+    @property
+    def password(self):
+        raise AttributeError('password is not readable attribute')
+
+    @password.setter
+    def password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def verify_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def is_authenticated(self):
+        return True
+
+    def is_active(self):
+        return True 
+
+    def is_anonymous(self):
+        return False 
+
+    def get_id(self):
+        return unicode(self.id)
+
+    def __repr__(self):
+        return "<User {}>".format(self.email)
 
 Base.metadata.create_all(engine)
 
@@ -196,12 +230,10 @@ class ScheduleManager(object):
             return True 
         return False
 
-    def __init__(self, session=None):
+    def __init__(self):
         if self.exists():
             import sys
             sys.exit()
-
-        self.session = session or get_sql_session()
         self.redis_conn.set(self.name, datetime.now(), ex=20)
         logger.info("Start manager")
 
@@ -222,20 +254,22 @@ class ScheduleManager(object):
         self.redis_conn.set(self.name, datetime.now())
 
 
-    def check_schedule_time(self):
-        active_jobs = self.session.query(Job).filter(
+    @provide_session
+    def check_schedule_time(self, session=None):
+        active_jobs = session.query(Job).filter(
             Job.active==True).with_for_update().all()
         logger.info("Find {} active jobs, try to schedule them".format(
                     len(active_jobs)))
         if active_jobs:
             for job in active_jobs:
-                task_id = job.schedule_task(self.session)
+                task_id = job.schedule_task(session)
                 if task_id is not None:
                     logger.info("schedule task {} for job {}".format(task_id, job.name))
 
-    def check_tasks_status(self):
+    @provide_session
+    def check_tasks_status(self, session=None):
         # try to recover active tasks:
-        active_tasks = self.session.query(TaskInstance).filter(
+        active_tasks = session.query(TaskInstance).filter(
                     TaskInstance.state.in_(("PENDING", "STARTED"))
                     ).with_for_update().all()
         if len(active_tasks) == 0:
@@ -243,7 +277,13 @@ class ScheduleManager(object):
             return 
 
         for task in active_tasks:
-            celery_task = execute_command.AsyncResult(task.task_id)
+            if task.operator == 'bash':
+                celery_task = execute_command.AsyncResult(task.task_id)
+            elif task.operator == 'sql':
+                pass
+                # TODO
+                # add sql query
+                # celery_task = 
             if celery_task.status == task.state:
                 continue 
             task.state = celery_task.status
@@ -254,7 +294,7 @@ class ScheduleManager(object):
                     task.result = str(celery_task.result)
                 else:
                     task.result = celery_task.result
-        self.session.commit()
+        session.commit()
 
 
 
@@ -274,12 +314,31 @@ class RequestHandler:
         Base.metadata.create_all(bind=engine)
 
     @classmethod
-    def get_tags(cls, session=get_sql_session()):
+    @provide_session
+    def get_tags(cls, session=None):
         """get all distinct tags"""
         return session.query(Tag.name).distinct().order_by(Tag.name).all()
 
     @classmethod
-    def get_jobs(cls, session=get_sql_session(), only_active=False):
+    @provide_session    
+    def get_user(cls, email, session=None):
+        return session.query(User).filter(User.email==email).first()
+
+    @classmethod
+    @provide_session    
+    def get_user_by_id(cls, id, session=None):
+        return session.query(User).filter(User.id==id).first()
+
+    @classmethod
+    @provide_session
+    def register(cls, email, password, session=None):
+        user = User(email=email, password=password)
+        session.add(user)
+        session.commit()
+
+    @classmethod
+    @provide_session
+    def get_jobs(cls, only_active=False, session=None):
         """get ALL jobs, can filter for only active jobs"""
         q = session.query(Job)
         if only_active:
@@ -287,7 +346,8 @@ class RequestHandler:
         return q.all()
 
     @classmethod
-    def info_job(cls, job_name, session=get_sql_session()):
+    @provide_session
+    def info_job(cls, job_name, session=None):
         """ given a job_name, get all tags and its tasks """
         job = session.query(Job).filter(Job.name==job_name).first()
         if job:
@@ -301,7 +361,8 @@ class RequestHandler:
         return None, None, None
 
     @classmethod
-    def get_jobs_by_tag(cls, session=get_sql_session(), only_active=False, tag_name=None):
+    @provide_session
+    def get_jobs_by_tag(cls, only_active=False, tag_name=None, session=None):
         """if given tag_name, will get all jobs that have this tag,
         else return dictionary of tags and their list of jobs"""
         tj = session.query(Tag, Job).filter(Job.name==Tag.job_name)
@@ -322,8 +383,8 @@ class RequestHandler:
         return tags_dict
 
     @classmethod
-    def info_tasks(cls, session=get_sql_session(), 
-                    only_running=False, job_name=None):
+    @provide_session
+    def info_tasks(cls, only_running=False, job_name=None, session=None):
         """ get all running tasks """
         q = session.query(TaskInstance)
         if only_running:
@@ -334,7 +395,8 @@ class RequestHandler:
         return tasks
 
     @classmethod
-    def add_job(cls, job_args, tags, session=get_sql_session()):
+    @provide_session
+    def add_job(cls, job_args, tags, session=None):
         """ add a new job """
         # check existing
         ex_job = session.query(Job).filter(
@@ -353,7 +415,8 @@ class RequestHandler:
 
 
     @classmethod
-    def edit_job(cls, job_args, tags, session=get_sql_session()):
+    @provide_session
+    def edit_job(cls, job_args, tags, session=None):
         """ Change the existing job, remove outdated tags
         and add newly added tags to db.
         """
@@ -383,7 +446,8 @@ class RequestHandler:
         session.commit()
 
     @classmethod
-    def change_job_status(cls, job_name, session=get_sql_session(), deactivate=True):
+    @provide_session
+    def change_job_status(cls, job_name, session=None, deactivate=True):
         """ set the job instance inactive """
         job = session.query(Job).filter(
                 Job.name==job_name).with_for_update().first()
@@ -413,14 +477,16 @@ class RequestHandler:
         return msg
 
     @classmethod
-    def check_task_stdout(cls, task_id, session=get_sql_session()):
+    @provide_session
+    def check_task_stdout(cls, task_id, session=None):
         # read-only
         task = session.query(TaskInstance).filter(TaskInstance.id==task_id).first()
         return task
 
 
     @classmethod
-    def remove_job(cls, job_name, session=get_sql_session()):
+    @provide_session
+    def remove_job(cls, job_name, session=None):
         """ remove from job table """
         job = session.query(Job).filter(Job.name==job_name
                     ).with_for_update().first()
@@ -432,7 +498,8 @@ class RequestHandler:
         session.commit()
 
     @classmethod
-    def force_schedule_for_job(cls, job_name, session=get_sql_session()):
+    @provide_session
+    def force_schedule_for_job(cls, job_name, session=None):
         job = session.query(Job).filter(Job.name==job_name
                 ).with_for_update().first()
         if job:
