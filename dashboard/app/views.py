@@ -152,6 +152,9 @@ def info_tag(tag_name):
     return render_template('tag.html', tag_name=tag_name, jobs=jobs)
 
 
+@main.route('/alerts', methods=['GET','POST'])
+def subscribe_to_alert():
+    pass
 # @main.route('/jobs/tasks/<task_id>', methods=['GET'])
 # def info_task(task_id):
 #     task = RequestHandler.check_task_stdout(task_id)

@@ -14,7 +14,6 @@ from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import reconstructor, relationship, synonym
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# from dashboard.app import db
 from dashboard.celery_worker import execute_command, execute_func
 from dashboard.db import get_redis_conn, provide_session, engine#, run_query_on_sql_server
 from dashboard.utils import convert_to_utc, convert_to_local
