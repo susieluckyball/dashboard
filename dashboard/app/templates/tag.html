@@ -5,14 +5,22 @@
 <div class="container-fluid">
 	<div class="page-header">
 		<h3>
-			Jobs for Tag 
+			Tag 
 			<button type="button" class="btn btn-info btn-sm">{{ tag_name }}</button>
 		</h3>
 	</div>
 
-	<p>
-		<a href='#'> subscribe </a>
-	</p>
+	<div>
+			{% if current_user.is_authenticated() %}
+				{% if current_user.is_subscribed_to(name=tag_name, job=False) %}
+				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
+				{% else %}
+				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
+				{% endif %}
+			{% else %}
+			<h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
+			{% endif %}
+	</div>
 
 	<div>
 		<table id="sortable" class="table table-hover table-sm">

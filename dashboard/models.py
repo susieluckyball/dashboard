@@ -15,7 +15,8 @@ from sqlalchemy.orm import reconstructor, relationship, synonym
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from dashboard.celery_worker import execute_command, execute_func
-from dashboard.db import get_redis_conn, provide_session, engine#, run_query_on_sql_server
+from dashboard.db import engine, get_redis_conn, get_sql_session, provide_session#, run_query_on_sql_server
+from dashboard.email_utils import send_email
 from dashboard.utils import convert_to_utc, convert_to_local
 
 Base = declarative_base()
@@ -70,7 +71,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100))
+    name = Column(String(100), index=True)
     timezone = Column(String(20))
     update_time = Column(DateTime)
     start_dt = Column(DateTime)
@@ -80,6 +81,7 @@ class Job(Base):
     operator = Column(String) # bash, python, sql, etc
     command = Column(String)
     next_run_ts = Column(DateTime)
+    last_task_result = Column(String(1000))
 
     def __init__(self, name, timezone, start_dt=None, end_dt=None, 
                 active=True, schedule_interval=None, 
@@ -118,7 +120,11 @@ class Job(Base):
         if datetime.utcnow() < self.next_run_ts:
             return None
         task = TaskInstance(job=self)
-        celery_task = execute_command.apply_async(args=[task.command])
+        if task.operator == 'bash':
+            celery_task = execute_command.apply_async(args=[task.command])
+        # elif task.command == 'sql':
+            # add sql query
+            # celery_task = execute_sql.apply_async(args=[task.command, enterprise])
         task.task_id = celery_task.id 
         session.add(task)
         if not force_run:
@@ -131,7 +137,7 @@ class Job(Base):
         return celery_task.id
 
     def initialize_shortcommand(self):
-        max_size = 57
+        max_size = 30
         if len(self.command) > max_size:
             self.short_command = self.command[:max_size] + "..."
         else:
@@ -207,8 +213,40 @@ class User(Base):
     def get_id(self):
         return unicode(self.id)
 
+    @provide_session
+    def is_subscribed_to(self, name, job=True, session=None):
+        if job:
+            res = session.query(JobAlert).filter(and_(
+                JobAlert.job_name==name, 
+                JobAlert.email==self.email)).first()
+        else:
+            res = session.query(TagAlert).filter(and_(
+                TagAlert.tag_name==name, 
+                TagAlert.email==self.email)).first()
+        if res:
+            return True
+        return False        
+
     def __repr__(self):
         return "<User {}>".format(self.email)
+
+
+class JobAlert(Base):
+    __tablename__ = "job_alerts"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_name = Column(String(100))
+    email = Column(String(50))
+    # TODO
+    # add alert level
+    # default is alert when failure
+
+
+class TagAlert(Base):
+    __tablename__ = 'tag_alerts'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tag_name = Column(String(100))
+    email = Column(String(50))
+
 
 Base.metadata.create_all(engine)
 
@@ -216,6 +254,8 @@ Base.metadata.create_all(engine)
 ###############
 # Scheduler 
 ###############
+
+
 
 class ScheduleManager(object):
     name = "scheduler_manager"
@@ -240,8 +280,12 @@ class ScheduleManager(object):
     def start(self, poll_interval=30):
         while True:
             logger.info("Scheduler working...")
-            self.check_schedule_time()
-            self.check_tasks_status()
+            with get_sql_session() as session:
+                # schedule tasks
+                self.check_schedule_time(session)
+                # update running/pending tasks state
+                self.check_tasks_state(session)
+                # check 
             self.send_heartbeat()
             logger.info("Waiting for next poll...")
             sleep(poll_interval)
@@ -255,6 +299,7 @@ class ScheduleManager(object):
 
     @provide_session
     def check_schedule_time(self, session=None):
+        """ check all active jobs and schedule tasks when it's time """
         active_jobs = session.query(Job).filter(
             Job.active==True).with_for_update().all()
         logger.info("Find {} active jobs, try to schedule them".format(
@@ -266,8 +311,9 @@ class ScheduleManager(object):
                     logger.info("schedule task {} for job {}".format(task_id, job.name))
 
     @provide_session
-    def check_tasks_status(self, session=None):
-        # try to recover active tasks:
+    def check_tasks_state(self, session=None):
+        """ check celery jobs and change task status """
+        # try to recover active tasks
         active_tasks = session.query(TaskInstance).filter(
                     TaskInstance.state.in_(("PENDING", "STARTED"))
                     ).with_for_update().all()
@@ -276,13 +322,7 @@ class ScheduleManager(object):
             return 
 
         for task in active_tasks:
-            if task.operator == 'bash':
-                celery_task = execute_command.AsyncResult(task.task_id)
-            elif task.operator == 'sql':
-                pass
-                # TODO
-                # add sql query
-                # celery_task = 
+            celery_task = execute_command.AsyncResult(task.task_id)
             if celery_task.status == task.state:
                 continue 
             task.state = celery_task.status
@@ -293,8 +333,39 @@ class ScheduleManager(object):
                     task.result = str(celery_task.result)
                 else:
                     task.result = celery_task.result
+                self._update_job_last_state(task, session)
+
         session.commit()
 
+    def _update_job_last_state(self, task, session):
+        job = session.query(Job).filter(
+                        Job.name==task.job_name
+                        ).with_for_update().first()
+        if not job:
+            logger.error("Cannot find job name {}".format(task.job_name))
+            return 
+        # CAVEAT
+        # This is only for dashboard
+        # if sysout starts with 1, data check passed
+        job.last_task_result = task.result
+        if not job.last_task_result.startswith("1"):
+            self._send_alert(job, session)
+        session.commit()
+
+    def _send_alert(self, job, session):
+        job_followers = [f[0] for f in session.query(JobAlert.email).filter(
+                JobAlert.job_name==job.name).all()]
+        t = session.query(Tag.name.label("tag_name")).filter(
+                Tag.job_name==job.name)
+
+        tag_followers = [f[0] for f in session.query(TagAlert.email).filter(
+                TagAlert.tag_name.in_(t)).all()]
+        recipients = list(set(job_followers).union(set(tag_followers)))
+        if len(recipients):
+            subject = "Dashboard - Job Failure Alert"
+            body = "Job {} (command {}) status: \nfailed with sysout {}".format(
+                    job.name, job.command, job.last_task_result)
+            send_email(subject=subject, to_=recipients, body=body)
 
 
 class RequestHandler:
@@ -395,7 +466,7 @@ class RequestHandler:
 
     @classmethod
     @provide_session
-    def add_job(cls, job_args, tags, session=None):
+    def add_job(cls, job_args, tags, subscribers, session=None):
         """ add a new job """
         # check existing
         ex_job = session.query(Job).filter(
@@ -406,16 +477,23 @@ class RequestHandler:
         # create a job instance
         job = Job(**job_args)
         session.add(job)
+        # add tag
         tag_instances = [Tag(t, job_args["name"]) for t in tags]
+        # add alerts 
+        # TODO:
+        # we did not check whether the email is a valid user here!!
+        job_alerts = [JobAlert(job_name=job_args["name"], email=s) for s in subscribers]
         for ti in tag_instances:
             session.add(ti)
+        for ja in job_alerts:
+            session.add(ja)
         session.commit()
         return True
 
 
     @classmethod
     @provide_session
-    def edit_job(cls, job_args, tags, session=None):
+    def edit_job(cls, job_args, tags, subscribers, session=None):
         """ Change the existing job, remove outdated tags
         and add newly added tags to db.
         """
@@ -423,24 +501,44 @@ class RequestHandler:
                 Job.name==job_args['name']).with_for_update().first() 
         ex_tags = session.query(Tag).filter(
                 Tag.job_name==job_args['name']).with_for_update().all()
+        ex_subs = session.query(JobAlert).filter(
+                JobAlert.job_name==job_args['name']).with_for_update().all()
     
         tmp = Job(**job_args)
+        # update jobs attributes
         for k, v in vars(tmp).items():
             if k.startswith("_"):
                 continue 
             setattr(job, k, v)
         del tmp
 
-        all_tags = set(tags)
+        # remove the deleted tags from db, 
+        # add newly added tags to db
+        all_tags = set(tags)    # updated tags
         for t in ex_tags:
             if t.name in all_tags:
-                all_tags.remove(t.name)
+                # if an existing tag is still in updated tags,
+                # remove from all tags which will be the set
+                # for newly added tags after the loop is finished
+                all_tags.remove(t.name)   
             else:
+                # if an existing tag is deleted by user
+                # remove from db
                 session.delete(t)
                 logger.debug("delete tag {} for job {}".format(t.name, job_args['name']))
+        # create all non-existing tags
         for name in all_tags:
             session.add(Tag(name, job_args['name']))
             logger.debug("add tag {} for job {}".format(name, job_args['name']))
+
+        all_subs = set(subscribers)    # updated subscribers
+        for s in ex_subs:
+            if s.email in all_subs:
+                all_subs.remove(s.email)
+            else:
+                session.delete(s)
+        for email in all_subs:
+            session.add(JobAlert(job_name=job.name, email=email))
 
         session.commit()
 
@@ -507,11 +605,41 @@ class RequestHandler:
         return None
 
     @classmethod
-    def get_task_status(cls):
-        raise NotImplementedError
+    @provide_session
+    def subscribe(cls, inst_type, name, email, session=None):
+        if inst_type == 'job':
+            alert = JobAlert(job_name=name, email=email)
+        elif inst_type == 'tag':
+            alert = TagAlert(tag_name=name, email=email)
 
+        session.add(alert)
+        session.commit()
 
+    @classmethod
+    @provide_session
+    def unsubscribe(cls, inst_type, name, email, session=None):
+        if inst_type == 'job':
+            sub = session.query(JobAlert).filter(and_(
+                    JobAlert.job_name==name, JobAlert.email==email)
+                    ).with_for_update().all()
+        elif inst_type == 'tag':
+            sub = session.query(TagAlert).filter(and_(
+                    TagAlert.tag_name==name, TagAlert.email==email)
+                    ).with_for_update().all()
+        for s in sub:
+            session.delete(s)
+        session.commit()
 
+    @classmethod
+    @provide_session
+    def get_subscribed(cls, inst_type, name, session=None):
+        if inst_type == 'job':
+            subs = session.query(JobAlert.email).filter(
+                JobAlert.job_name==name).all()
+        elif inst_type == 'tag':
+            subs = session.query(TagAlert.email).filter(
+                TagAlert.tag_name==name).all()
+        return [s[0] for s in subs]
 
 
 # class Monitor(object):

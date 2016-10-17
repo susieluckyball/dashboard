@@ -29,6 +29,17 @@
             <div class="form-group "><label class="control-label" for="tags">Tags</label><br>
                 <input data-role="tagsinput" id="tags" name="tags" type="text" value='{{ form.tags.data }}' autocomplete="off">
             </div>
+
+            {% if modify or not current_user.is_authenticated() %}
+            <div class="form-group "><label class="control-label" for="subscriptions">Subscribe to Alert</label><br>
+                <input data-role="tagsinput" id="subscriptions" name="subscriptions" type="text" value='{{ form.subscriptions.data }}' autocomplete="off">
+            </div>
+            {% else %}
+            <div class="form-group "><label class="control-label" for="subscriptions">Subscribe to Alert</label><br>
+                <input data-role="tagsinput" id="subscriptions" name="subscriptions" type="text" value='{{ current_user.email }}' autocomplete="off">
+            </div>
+            {% endif %}
+
             {{ wtf.form_field(form.command) }}
             {{ wtf.form_field(form.submit) }}
         </form>

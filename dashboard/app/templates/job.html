@@ -2,7 +2,7 @@
 
 {% block page_content %}
 <div class="container-fluid">
-	<div class="page-header"><h2> {{ job.name }} <a href="{{ url_for('main.edit_job', job_name=job.name ) }}" type="button" class="btn btn-primary btn-md">edit {{job.name}}</a> </h2></div>
+	<div class="page-header"><h1> {{ job.name }} <a href="{{ url_for('main.edit_job', job_name=job.name ) }}"> [edit] </a> </h1></span></div>
 	<div class="row content">
 	<div class="col-sm-7">
 		<table id="sortable" class="table table-hover is-breakable">
@@ -38,7 +38,15 @@
 	</div>
 
 	<div class="col-sm-5">
-			<h3><a href="{{ url_for('main.subscribe_to_alert', job_name=job.name ) }}" type="button" class="btn btn-primary btn-md"> subscribe </a></h3>
+			{% if current_user.is_authenticated() %}
+				{% if current_user.is_subscribed_to(name=job.name, job=True) %}
+				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
+				{% else %}
+				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
+				{% endif %}
+			{% else %}
+			<h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
+			{% endif %}
 			<table class="table table-hover is-breakable">
 			<tbody>
 				<tr>

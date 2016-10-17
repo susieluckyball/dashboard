@@ -1,6 +1,6 @@
 from flask import Flask, request, render_template, redirect, flash, url_for, jsonify, session
 from flask.ext.wtf import Form 
-from flask_login import login_user, logout_user, login_required
+from flask_login import login_user, logout_user, login_required, current_user
 from wtforms import (BooleanField, PasswordField, SelectField, StringField, 
                     SubmitField, TextAreaField, TextField)
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Required
@@ -19,24 +19,28 @@ class JobForm(Form):
     operator = SelectField('Operator', coerce=str, choices=[("bash", "Bash"),
             ("python", "Python"), ("sql", "SQL")])
     tags = TextField('Tags', default='')
+    subscriptions = TextField('Subscribe to Alert', default='')
     command = TextAreaField('Command', validators=[DataRequired()],
                 render_kw={"rows":5, "cols":80})
     submit = SubmitField('submit', render_kw={"class":"btn btn-primary"})
 
-    def add_placeholder(self, job, tags):
+    def add_placeholder(self, job, tags, subscriptions):
         for field in self:
             if field.type in ('CSRFTokenField', 'HiddenField'):
                 continue
-            if field.name not in ('tags', 'submit'):
+            if field.name not in ('tags', 'subscriptions', 'submit'):
                 setattr(field, "data", getattr(job, field.name))
             elif field.name == 'tags':
                 setattr(field, "data", ','.join(tags))
+            elif field.name == 'subscriptions':
+                setattr(field, "data",  ','.join(subscriptions))
 
 class LoginForm(Form):
     email = StringField('Email', validators=[DataRequired(), Email()]) 
     password = PasswordField('Password', validators=[DataRequired()]) 
     remember_me = BooleanField('Keep me logged in')
     submit = SubmitField('Log In')
+
 
 class RegistrationForm(Form):
     email = StringField('Email', validators=[DataRequired(), Length(1, 64), Email()])
@@ -48,6 +52,9 @@ class RegistrationForm(Form):
         # if User.query.filter_by(email=field.data).first():
         if RequestHandler.get_user(email=field.data):
             raise ValidationError('Email already registered.')
+
+# class SubscribeForm(Form):
+
 
 
 @main.route('/', methods=['GET', 'POST'])
@@ -70,13 +77,18 @@ def add_job():
     form = JobForm()
     if request.method == 'POST':
         if form.validate():
-            job_args = {k: v for k, v in request.form.items() if k != 'tags'}
+            job_args = {k: v for k, v in request.form.items() \
+                        if k not in ('tags', 'subscriptions')}
             if len(request.form['tags']) == 0:
                 tags = ["no-tag"]
             else:
-                tags = [t.strip() for t in request.form['tags'].split(",")]
-                
-            added = RequestHandler.add_job(job_args, tags)
+                tags = [t.strip() for t in request.form['tags'].split(',')]
+
+            if len(request.form['subscriptions']):
+                subscriptions = [s.strip() for s in request.form['subscriptions'].split(',')]
+            else:
+                subscriptions = []
+            added = RequestHandler.add_job(job_args, tags, subscriptions)
             if added:
                 flash("Job create request for job name {}".format(request.form["name"]), "success")
                 return redirect(url_for('main.index'))
@@ -92,12 +104,15 @@ def add_job():
 @main.route('/jobs/edit/<job_name>', methods=['GET', 'POST'])
 def edit_job(job_name):
     current_job, tags, _ = RequestHandler.info_job(job_name)
+
     if current_job is None:
         # must be a bug...
         flash("Bug: job {} does not exist".format(job_name))
         return jsonify({})
+    subscriptions = RequestHandler.get_subscribed(inst_type='job',
+        name=current_job.name)
     form = JobForm()
-    form.add_placeholder(current_job, tags)
+    form.add_placeholder(current_job, tags, subscriptions)
     form.name.render_kw = {'disabled': True}
     if request.method == 'POST':
         if form.validate():
@@ -107,7 +122,11 @@ def edit_job(job_name):
                 tags = ["no-tag"]
             else:
                 tags = [t.strip() for t in request.form['tags'].split(",")]
-            if RequestHandler.edit_job(job_args, tags):
+            if len(request.form['subscriptions']):
+                subscriptions = [s.strip() for s in request.form['subscriptions'].split(',')]
+            else:
+                subscriptions = []
+            if RequestHandler.edit_job(job_args, tags, subscriptions):
                 flash("Edited job {}".format(request.form['name']), "success")
             return redirect(url_for('main.index'))
         else:
@@ -152,9 +171,32 @@ def info_tag(tag_name):
     return render_template('tag.html', tag_name=tag_name, jobs=jobs)
 
 
-@main.route('/alerts', methods=['GET','POST'])
-def subscribe_to_alert():
-    pass
+
+@main.route('/alerts/<inst_type>/<name>/<action>', methods=['GET'])
+@login_required
+def edit_subscription_for_current_user(inst_type, name, action='subscribe'):
+    email = current_user.email 
+    if action == 'subscribe':
+        RequestHandler.subscribe(inst_type, name, email)
+        flash("Subscribe {} to {} '{}'".format(email, inst_type, name))
+    else:
+        RequestHandler.unsubscribe(inst_type, name, email)
+        flash("Unsubscribe {} to {} '{}'".format(email, inst_type, name))
+    if inst_type == 'job':
+        return redirect(url_for('main.info_job', 
+                    job_name=name, action='info'))
+    else:
+        return redirect(url_for('main.info_tag', tag_name=name))
+
+
+@main.route('/alerts/<inst_type>/<name>/<email>', methods=['GET','POST'])
+def subscribe(inst_type=None, name=None, email=None):
+    if inst_type is None or name is None or email is None:
+        # get
+        pass
+
+
+
 # @main.route('/jobs/tasks/<task_id>', methods=['GET'])
 # def info_task(task_id):
 #     task = RequestHandler.check_task_stdout(task_id)

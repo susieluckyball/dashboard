@@ -32,6 +32,14 @@ def execute_command(command):
     except subprocess.CalledProcessError as e:
         raise RuntimeError('Celery command failed\n{}'.format(e))
 
+@worker.task
+def execute_sql(sql, session):
+    try:
+        res = session.execute(sql).fetchall()
+        print(res)
+    except Exception as e:
+        raise RuntimeError('Celery sql query failed\n{}'.format(e))
+
 
 @worker.task
 def execute_func(func, args):

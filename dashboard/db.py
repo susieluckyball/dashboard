@@ -41,6 +41,11 @@ SQL_ALCHEMY_CONN = config['default'].SQLALCHEMY_DATABASE_URI
 engine = None
 session_factory = None
 
+
+# enterprise = None
+
+# def configure_sql_server():
+
 def configure_orm():
     global engine
     global session_factory
@@ -60,18 +65,18 @@ configure_orm()
 def get_redis_conn():
     return _redis_conn
 
-# @contextmanager
-# def get_sql_session():
-#     session = Session()
-#     session._model_changes = {}
-#     try:
-#         yield session
-#         session.commit()
-#     except:
-#         session.rollback()
-#         raise 
-#     finally:
-#         session.close()
+@contextmanager
+def get_sql_session():
+    session = session_factory()
+    session._model_changes = {}
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise 
+    finally:
+        session.close()
 
 
 # @contextmanager
