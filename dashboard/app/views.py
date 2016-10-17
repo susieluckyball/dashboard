@@ -140,7 +140,8 @@ def info_job(job_name, action='info'):
         job, tags, tasks = RequestHandler.info_job(job_name)
         job.initialize_shortcommand()
         job.get_local_run_time()
-        tasks = tasks[:min(10, len(tasks))]
+        for t in tasks:
+            t.get_local_run_time(job.timezone)
         return render_template('job.html', job=job, 
                         tags=tags, tasks=tasks)
     elif action == 'run':
@@ -165,10 +166,18 @@ def info_job(job_name, action='info'):
         RequestHandler.remove_job(job_name)
     return redirect(url_for('main.index'))
 
+
 @main.route('/tags/<tag_name>', methods=['GET', 'POST'])
 def info_tag(tag_name):
-    jobs = RequestHandler.get_jobs_by_tag(only_active=False, tag_name=tag_name)
-    return render_template('tag.html', tag_name=tag_name, jobs=jobs)
+    email = request.args.get('email')
+    if email is None:
+        jobs = RequestHandler.get_jobs_by_tag(only_active=False, tag_name=tag_name)
+        subscribe = RequestHandler.get_subscribed(inst_type='tag', name=tag_name)
+        return render_template('tag.html', tag_name=tag_name, 
+                    jobs=jobs, emails=subscribe)
+    else:
+        return redirect(url_for('main.edit_tag_subscription',
+            action='add', name=tag_name, email=email))
 
 
 
@@ -189,21 +198,15 @@ def edit_subscription_for_current_user(inst_type, name, action='subscribe'):
         return redirect(url_for('main.info_tag', tag_name=name))
 
 
-@main.route('/alerts/<inst_type>/<name>/<email>', methods=['GET','POST'])
-def subscribe(inst_type=None, name=None, email=None):
-    if inst_type is None or name is None or email is None:
-        # get
-        pass
-
-
-
-# @main.route('/jobs/tasks/<task_id>', methods=['GET'])
-# def info_task(task_id):
-#     task = RequestHandler.check_task_stdout(task_id)
-#     if task is not None:
-#         return jsonify({"output": task.result})
-#     return jsonify({"Error": "cannot find the task..."})
-         
+@main.route('/tag_alerts/<action>/<name>/<email>', methods=['GET'])
+def edit_tag_subscription(action, name, email):
+    if action == 'remove':
+        RequestHandler.unsubscribe(inst_type='tag', name=name, email=email)
+    elif action == 'add':
+        emails = [e.strip() for e in email.split(",")]
+        for e in emails:
+            RequestHandler.subscribe(inst_type='tag', name=name, email=e)
+    return redirect(url_for('main.info_tag', tag_name=name))
 
 
 @login_manager.user_loader

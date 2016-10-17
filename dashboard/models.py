@@ -66,6 +66,11 @@ class TaskInstance(Base):
         return "<TaskInstance(job_id={}, command={}, exe_ts={}, status={})>".format(
                 self.job_id, self.command, self.execute_ts, self.status)
 
+    def get_local_run_time(self, tz):
+        self.local_execution_date =  convert_to_local(
+                self.execution_date, tz)
+
+
 @functools.total_ordering
 class Job(Base):
     __tablename__ = "jobs"
@@ -230,7 +235,7 @@ class User(Base):
     def __repr__(self):
         return "<User {}>".format(self.email)
 
-
+# TODO: ordering...
 class JobAlert(Base):
     __tablename__ = "job_alerts"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -417,7 +422,7 @@ class RequestHandler:
 
     @classmethod
     @provide_session
-    def info_job(cls, job_name, session=None):
+    def info_job(cls, job_name, max_task_num=20, session=None):
         """ given a job_name, get all tags and its tasks """
         job = session.query(Job).filter(Job.name==job_name).first()
         if job:
@@ -425,7 +430,9 @@ class RequestHandler:
                     Tag.job_name==job_name).all()
             tags = [t[0] for t in tags]
             tasks = session.query(TaskInstance).filter(
-                    TaskInstance.job_id==job.id).all()
+                    TaskInstance.job_id==job.id).order_by(
+                    TaskInstance.execution_date.desc()).limit(
+                    max_task_num).all()
             tasks = sorted(tasks)
             return job, tags, tasks
         return None, None, None
@@ -639,7 +646,7 @@ class RequestHandler:
         elif inst_type == 'tag':
             subs = session.query(TagAlert.email).filter(
                 TagAlert.tag_name==name).all()
-        return [s[0] for s in subs]
+        return sorted([s[0] for s in subs])
 
 
 # class Monitor(object):

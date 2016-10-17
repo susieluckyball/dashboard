@@ -8,8 +8,8 @@
 		<table id="sortable" class="table table-hover is-breakable">
 			<thead>
 				<tr>
-					<th width='20%'>Execution Time</th>
-					<th width='80%'>Task Status/Out</th>
+					<th width='30%'>Execution Time (Local)</th>
+					<th width='70%'>Task Status/Out</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -18,17 +18,17 @@
 					{% if task.state == 'SUCCESS' %}
 					<!-- This is hardcoded for datacheck output -->
 						{% if task.result.startswith('1') %}
-					<td class="success">{{ task.execution_date }}</td>
+					<td class="success">{{ task.local_execution_date }}</td>
 					<td class="success">{{ task.result }}</td>
 						{% else %}
-					<td class="danger">{{ task.execution_date }}</td>
+					<td class="danger">{{ task.local_execution_date }}</td>
 					<td class="danger">{{ task.result }}</td>
 						{% endif %}
 					{% elif task.state in ("PENDING", "STARTED") %}
-					<td class="info">{{ task.execution_date }}</td>
+					<td class="info">{{ task.local_execution_date }}</td>
 					<td class="info">{{ task.state }}</td>
 					{% else %}
-					<td class="warning">{{ task.execution_date }}</td>
+					<td class="warning">{{ task.local_execution_date }}</td>
 					<td class="warning">Task fail: {{ task.result }}</td>
 					{% endif %}
 				</tr>
@@ -68,7 +68,8 @@
 			</tbody>
 			</table>
 		
-			<p> <h4>
+			<p> 
+				<h4>
 					tags:
 					{% for t in tags %}
 					<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>

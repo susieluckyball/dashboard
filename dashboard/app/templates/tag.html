@@ -4,61 +4,87 @@
 {% block page_content %}
 <div class="container-fluid">
 	<div class="page-header">
-		<h3>
-			Tag 
-			<button type="button" class="btn btn-info btn-sm">{{ tag_name }}</button>
-		</h3>
+		<h2>
+			<span class="glyphicon glyphicon-tags text-info"> {{ tag_name }} </span> 
+		</h2>
 	</div>
 
-	<div>
-			{% if current_user.is_authenticated() %}
-				{% if current_user.is_subscribed_to(name=tag_name, job=False) %}
-				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
-				{% else %}
-				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
-				{% endif %}
-			{% else %}
-			<h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
-			{% endif %}
-	</div>
-
-	<div>
-		<table id="sortable" class="table table-hover table-sm">
-		<thead>
-			<tr>
-				<th>Activity</th>
-				<th>Job Name</th>
-				<th>Timezone</th>
-				<th>Command</th>
-				<th>Next Run UTC</th>
-				<th></th>
+	<div class="row content">
+	<div class="col-sm-8">
+		<div>
+			<table id="sortable" class="table table-hover table-sm">
+			<thead>
+				<tr>
+					<th>Activity</th>
+					<th>Job Name</th>
+					<th>Timezone</th>
+					<th>Command</th>
+					<th>Next Run UTC</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+			{% for job in jobs %}
+			 <tr>
+			 	{% if job.active %}
+			 	<td>Active</td> 
+			 	{% else %}
+			 	<td>Inactive</td>
+			 	{% endif %}
+				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info' ) }}">{{ job.name }}</a></td>
+				<td>{{ job.timezone }}</td>
+				<td>{{ job.command }} </td>
+				<td>{{ job.next_run_ts }}</td> 
+				<td class="dropdown">
+			        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
+			        <ul class="dropdown-menu">
+		          		<li><a href="#">Schedule Now</a></li>
+						<li><a href="#">Edit</a></li>
+						<li><a href="#">Deactivate</a></li>
+						<li><a href="#">Delete</a></li>
+			       	</ul>
+			    </td> 
 			</tr>
-		</thead>
-		<tbody>
-		{% for job in jobs %}
-		 <tr>
-		 	{% if job.active %}
-		 	<td>Active</td> 
-		 	{% else %}
-		 	<td>Inactive</td>
-		 	{% endif %}
-			<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info' ) }}">{{ job.name }}</a></td>
-			<td>{{ job.timezone }}</td>
-			<td>{{ job.command }} </td>
-			<td>{{ job.next_run_ts }}</td> 
-			<td class="dropdown">
-		        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
-		        <ul class="dropdown-menu">
-	          		<li><a href="#">Schedule Now</a></li>
-					<li><a href="#">Edit</a></li>
-					<li><a href="#">Deactivate</a></li>
-					<li><a href="#">Delete</a></li>
-		       	</ul>
-		    </td> 
-		</tr>
-		{% endfor %}
-		</tbody>
+			{% endfor %}
+			</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="col-sm-4">
+		<div> 
+			<h3>Subscriptions: 
+				{% if current_user.is_authenticated() %}
+					{% if current_user.is_subscribed_to(name=tag_name, job=False) %}
+					<a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a>
+					{% else %}
+					<a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a>
+					{% endif %}
+				{% else %}
+				<a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.
+				{% endif %}
+			</h3>
+		</div>
+
+		<table class="table table-hover is-breakable">
+			<tbody>
+				{% for email in emails %}
+				<tr>
+					<td><a href="{{ url_for('main.edit_tag_subscription', action='remove', name=tag_name, email=email) }}" class="glyphicon glyphicon-trash text-info"></a></td>
+					<td>{{ email }}<td>
+				</tr>
+				{% endfor %}
+			<tbody>
 		</table>
+		<div>
+			<form>
+				<div class="form-group">
+					<input type="text" name="email">
+					<button class="btn btn-primary " name="add_subscription" type="submit">Add</button>
+				</div>				
+			</form>
+		</div>
+
 	</div>
 
 </div>
