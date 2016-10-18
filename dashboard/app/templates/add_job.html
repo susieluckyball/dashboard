@@ -25,7 +25,8 @@
             {{ wtf.form_field(form.start_dt) }}
             {{ wtf.form_field(form.end_dt) }}
             {{ wtf.form_field(form.schedule_interval) }}
-            {{ wtf.form_field(form.operator) }}
+            <div>{{ wtf.form_field(form.operator) }}</div>
+            <div id='db'>{{ wtf.form_field(form.database)}}</div>
             <div class="form-group "><label class="control-label" for="tags">Tags</label><br>
                 <input data-role="tagsinput" id="tags" name="tags" type="text" value='{{ form.tags.data }}' autocomplete="off">
             </div>
@@ -52,4 +53,17 @@
 {% block scripts %}
 {{super()}}
 <script src="{{ url_for('static', filename='js/bootstrap-tagsinput.min.js') }}"></script>
+
+<script type="text/javascript">
+$(function() {
+    $('#db').hide(); 
+    $('#operator').change(function(){
+        if($('#operator').val() == 'sql') {
+            $('#db').show(); 
+        } else {
+            $('#db').hide(); 
+        } 
+    });
+});
+</script>
 {%- endblock scripts %}

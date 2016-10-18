@@ -2,86 +2,107 @@
 
 {% block page_content %}
 <div class="container-fluid">
-	<div class="page-header"><h1> {{ job.name }} <a href="{{ url_for('main.edit_job', job_name=job.name ) }}"> [edit] </a> </h1></span></div>
-	<div class="row content">
-	<div class="col-sm-7">
-		<table id="sortable" class="table table-hover is-breakable">
-			<thead>
-				<tr>
-					<th width='30%'>Execution Time (Local)</th>
-					<th width='70%'>Task Status/Out</th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for task in tasks %}
-				<tr>
-					{% if task.state == 'SUCCESS' %}
-					<!-- This is hardcoded for datacheck output -->
-						{% if task.result.startswith('1') %}
-					<td class="success">{{ task.local_execution_date }}</td>
-					<td class="success">{{ task.result }}</td>
-						{% else %}
-					<td class="danger">{{ task.local_execution_date }}</td>
-					<td class="danger">{{ task.result }}</td>
-						{% endif %}
-					{% elif task.state in ("PENDING", "STARTED") %}
-					<td class="info">{{ task.local_execution_date }}</td>
-					<td class="info">{{ task.state }}</td>
-					{% else %}
-					<td class="warning">{{ task.local_execution_date }}</td>
-					<td class="warning">Task fail: {{ task.result }}</td>
-					{% endif %}
-				</tr>
-				{% endfor %}
-			</tbody>
-		</table>
-	</div>
+  <div class="page-header"><h1> {{ job.name }} <a href="{{ url_for('main.edit_job', job_name=job.name ) }}"> [edit] </a> </h1></span></div>
+  <div class="row content">
+  <div class="col-sm-7">
+    <table id="sortable_desc_on_ts" class="table table-hover is-breakable">
+      <thead>
+        <tr>
+          <th width='30%'>Execution Time (Local)</th>
+          <th width='70%'>Task Status/Out</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr>
+          {% if task.state == 'SUCCESS' %}
+          <!-- This is hardcoded for datacheck output -->
+            {% if isinstance(task.result, str) and task.result.startswith('1') %}
+          <td class="success">{{ task.local_execution_date }}</td>
+          <td class="success">{{ task.result }}</td>
+            {% else %}
+          <td class="danger">{{ task.local_execution_date }}</td>
+          <td class="danger">{{ task.result }}</td>
+            {% endif %}
+          {% elif task.state in ("PENDING", "STARTED") %}
+          <td class="info">{{ task.local_execution_date }}</td>
+          <td class="info">{{ task.state }}</td>
+          {% else %}
+          <td class="warning">{{ task.local_execution_date }}</td>
+          <td class="warning">Task fail: {{ task.result }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-	<div class="col-sm-5">
-			{% if current_user.is_authenticated() %}
-				{% if current_user.is_subscribed_to(name=job.name, job=True) %}
-				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
-				{% else %}
-				<h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
-				{% endif %}
-			{% else %}
-			<h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
-			{% endif %}
-			<table class="table table-hover is-breakable">
-			<tbody>
-				<tr>
-					<td>Timezone</td>
-					<td>{{ job.timezone }}</td>
-				</tr>
-				<tr>
-					<td>Command</td>
-					<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
-				</tr>
-				<tr>
-					<td>Run Interval</td>
-					<td> {{ job.schedule_interval }} </td>
-				</tr>
-				<tr>
-					<td>Next Run</td>
-					<td>{{ job.local_next_run }}</td> 
-				</tr>
-			</tbody>
-			</table>
-		
-			<p> 
-				<h4>
-					tags:
-					{% for t in tags %}
-					<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>
-					{% endfor %}
-				</h4>
-			</p>
+  <div class="col-sm-5">
+      {% if current_user.is_authenticated() %}
+        {% if current_user.is_subscribed_to(name=job.name, job=True) %}
+        <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
+        {% else %}
+        <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
+        {% endif %}
+      {% else %}
+      <h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
+      {% endif %}
+      <table class="table table-hover is-breakable">
+      <tbody>
+        <tr>
+          <td>Timezone</td>
+          <td>{{ job.timezone }}</td>
+        </tr>
+        <tr>
+          <td>Command</td>
+          <td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
+        </tr>
+        <tr>
+          <td>Run Interval</td>
+          <td> {{ job.schedule_interval }} </td>
+        </tr>
+        <tr>
+          <td>Next Run</td>
+          <td>{{ job.local_next_run }}</td> 
+        </tr>
+      </tbody>
+      </table>
+    
+      <p> 
+        <h4>
+          tags:
+          {% for t in tags %}
+          <a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>
+          {% endfor %}
+        </h4>
+      </p>
 
-			
-	</div>
-	</div>
+      
+  </div>
+  </div>
 
 
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+{{super()}}
+<script>
+$(document).ready(function() {
+    // $('#sortable_desc_on_ts').DataTable();
+    var table = $('#sortable_desc_on_ts').dataTable({
+      "aaSorting": [[0,'desc']]
+    });
+    $("td").tooltip({
+      'selector': '',
+      'placement': 'top',
+      'container':'body'
+    });
+
+    /* Apply the tooltips */
+    
+    $('[data-toggle="tooltip"]').tooltip(); 
+} );
+</script>
 {% endblock %}

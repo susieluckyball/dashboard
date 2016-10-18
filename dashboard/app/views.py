@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template, redirect, flash, url_for, jsonify, session
 from flask.ext.wtf import Form 
 from flask_login import login_user, logout_user, login_required, current_user
+from functools import partial
 from wtforms import (BooleanField, PasswordField, SelectField, StringField, 
                     SubmitField, TextAreaField, TextField)
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Required
@@ -16,8 +17,18 @@ class JobForm(Form):
     start_dt = TextField('Start Datetime (default now)')
     end_dt = TextField('End Datetime (default None)')
     schedule_interval = TextField('Run Interval (seconds)')
-    operator = SelectField('Operator', coerce=str, choices=[("bash", "Bash"),
-            ("python", "Python"), ("sql", "SQL")])
+    operator = SelectField('Operator', coerce=str, 
+            choices=[('bash', 'Bash'),
+                     ('sql', 'SQL'),
+                    ('python', 'Python')],
+            validators=[DataRequired()], id='operator')
+    database = SelectField('Database', coerce=str, 
+            choices=[('ENTERPRISE', 'Enterprise'),
+                    ('REFERENCE', 'Reference'),
+                    ('VENDORREF', 'Vendor Reference'),
+                    ('VENDOR', 'Vendor'),
+                    ('VENDORQS', 'Vendor QS'),
+                    ('STATARB', 'StatArb')])
     tags = TextField('Tags', default='')
     subscriptions = TextField('Subscribe to Alert', default='')
     command = TextAreaField('Command', validators=[DataRequired()],
@@ -143,7 +154,9 @@ def info_job(job_name, action='info'):
         for t in tasks:
             t.get_local_run_time(job.timezone)
         return render_template('job.html', job=job, 
-                        tags=tags, tasks=tasks)
+                        tags=tags, tasks=tasks, 
+                        isinstance=isinstance,
+                        str=unicode)
     elif action == 'run':
         flash("Force job {} to run now".format(job_name))
         celery_tid = RequestHandler.force_schedule_for_job(job_name)

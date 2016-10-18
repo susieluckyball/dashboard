@@ -14,7 +14,7 @@ from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import reconstructor, relationship, synonym
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from dashboard.celery_worker import execute_command, execute_func
+from dashboard.celery_worker import execute_command, execute_sql
 from dashboard.db import engine, get_redis_conn, get_sql_session, provide_session#, run_query_on_sql_server
 from dashboard.email_utils import send_email
 from dashboard.utils import convert_to_utc, convert_to_local
@@ -83,14 +83,16 @@ class Job(Base):
     end_dt = Column(DateTime, nullable=True)
     active = Column(Boolean)
     schedule_interval = Column(Integer)
-    operator = Column(String) # bash, python, sql, etc
+    operator = Column(String(10)) # bash, python, sql, etc
+    database = Column(String(20), nullable=True)
     command = Column(String)
     next_run_ts = Column(DateTime)
     last_task_result = Column(String(1000))
 
     def __init__(self, name, timezone, start_dt=None, end_dt=None, 
                 active=True, schedule_interval=None, 
-                operator='bash', command='sleep 10', 
+                operator='bash', database=None,
+                command='sleep 10',
                 next_run_ts=None, **kwargs):
         self.name = name
         self.timezone = timezone
@@ -112,6 +114,7 @@ class Job(Base):
         else:
             self.schedule_interval = int(schedule_interval)
         self.operator = operator
+        self.database = database
         self.command = command
         if start_dt is not None:
             self.next_run_ts = self.start_dt
@@ -127,9 +130,9 @@ class Job(Base):
         task = TaskInstance(job=self)
         if task.operator == 'bash':
             celery_task = execute_command.apply_async(args=[task.command])
-        # elif task.command == 'sql':
+        elif task.operator == 'sql':
             # add sql query
-            # celery_task = execute_sql.apply_async(args=[task.command, enterprise])
+            celery_task = execute_sql.apply_async(args=[task.command, self.database])
         task.task_id = celery_task.id 
         session.add(task)
         if not force_run:
@@ -353,7 +356,8 @@ class ScheduleManager(object):
         # This is only for dashboard
         # if sysout starts with 1, data check passed
         job.last_task_result = task.result
-        if not job.last_task_result.startswith("1"):
+        if (not isinstance(job.last_task_result, str) or 
+                not job.last_task_result.startswith("1")):
             self._send_alert(job, session)
         session.commit()
 
@@ -607,6 +611,14 @@ class RequestHandler:
         job = session.query(Job).filter(Job.name==job_name
                 ).with_for_update().first()
         if job:
+            # # SUSIE DEBUG
+            # print("force run!")
+            # from dashboard.db import open_sql_server_session
+            # from dashboard.config import config
+            # with open_sql_server_session(config, 'REFERENCE') as cursor:
+            #     res = cursor.execute(job.command).fetchall()
+            #     print(res)
+            # return res
             task_id = job.schedule_task(session, force_run=True)
             return task_id 
         return None

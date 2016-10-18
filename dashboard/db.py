@@ -79,24 +79,24 @@ def get_sql_session():
         session.close()
 
 
-# @contextmanager
-# def open_sql_server_session(config, db, commit=False):
-#     # This is for dev
-#     conn = pyodbc.connect(config['default'])
-#     cursor = conn.cursor()
-#     try:
-#         yield cursor
-#     except pyodbc.DatabaseError as e:
-#         error, = e.args
-#         cursor.execute("ROLLBACK")
-#         raise e 
-#     else:
-#         if commit:
-#             cursor.execute("COMMIT")
-#         else:
-#             cursor.execute("ROLLBACK")
-#     finally:
-#         connection.close()
+@contextmanager
+def open_sql_server_session(config, db, commit=False):
+    # This is for dev
+    conn = pyodbc.connect(config['default'].DB[db])
+    cursor = conn.cursor()
+    try:
+        yield cursor
+    except pyodbc.DatabaseError as e:
+        error, = e.args
+        cursor.execute("ROLLBACK")
+        raise e 
+    else:
+        if commit:
+            cursor.execute("COMMIT")
+        else:
+            cursor.execute("ROLLBACK")
+    finally:
+        conn.close()
 
 
 def provide_session(func):

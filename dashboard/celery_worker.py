@@ -3,7 +3,8 @@ from celery import states as celery_states
 import shlex
 import subprocess
 
-from dashboard.config import Config
+from dashboard.config import config
+from dashboard.db import open_sql_server_session
 
 class CeleryConfig(object):
     CELERY_ACCEPT_CONTENT = ['json', 'pickle']
@@ -33,14 +34,21 @@ def execute_command(command):
         raise RuntimeError('Celery command failed\n{}'.format(e))
 
 @worker.task
-def execute_sql(sql, session):
+def execute_sql(sql, database):
     try:
-        res = session.execute(sql).fetchall()
-        print(res)
+        # this is dev 
+        with open_sql_server_session(config, database) as cursor:
+            res = cursor.execute(sql).fetchall()
+            if len(res) == 1:
+                res = ", ".join([str(i) for i in res[0]])
+                return res
+            else:
+                return "sql query output: {}".formt(res)
     except Exception as e:
+        e = "passed sql query {}\n".format(sql) + str(e)
         raise RuntimeError('Celery sql query failed\n{}'.format(e))
 
 
-@worker.task
-def execute_func(func, args):
-    return func(args)
+# @worker.task
+# def execute_func(func, args):
+#     return func(args)
