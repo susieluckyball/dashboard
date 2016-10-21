@@ -2,21 +2,42 @@ from flask import Flask, request, render_template, redirect, flash, url_for, jso
 from flask.ext.wtf import Form 
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import partial
-from wtforms import (BooleanField, PasswordField, SelectField, StringField, 
-                    SubmitField, TextAreaField, TextField)
+from wtforms import (BooleanField, PasswordField, SelectField, SelectMultipleField, 
+                    StringField, SubmitField, TextAreaField, TextField, widgets)
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Required
 
 from app import main, auth, login_manager
 from models import RequestHandler
 
+
+class MultiCheckboxField(SelectMultipleField):
+    widget = widgets.ListWidget(prefix_label=False)
+    option_widget = widgets.CheckboxInput()
+
+
 class JobForm(Form):
     name = TextField('Name',  validators=[DataRequired()])
-    timezone = SelectField('Timezone', coerce=str, choices=[("US/Eastern","US/Eastern"), 
-            ("US/Central","US/Central"), ("Europe/London","Europe/London")], 
+    timezone = SelectField('Timezone', coerce=str, choices=[
+            ("US/Eastern","US/Eastern"), 
+            ("US/Central","US/Central"), 
+            ("Europe/London","Europe/London")], 
             validators=[DataRequired()])
     start_dt = TextField('Start Datetime (default now)')
     end_dt = TextField('End Datetime (default None)')
-    schedule_interval = TextField('Run Interval (seconds)')
+    schedule_interval = SelectField('Schedule Frequency', 
+            choices=[('@daily', 'Daily'),
+                    ('@weekdaydaily', 'Weekday Daily'),
+                    ('@hourly', 'Hourly'),
+                    ('@weekly', 'Weekly'),
+                    ('other', 'Other')],
+            id='schedule_interval',
+            validators=[DataRequired()])
+    schedule_interval_text = TextField(("Specify run interval in hours or "
+            "in crontab time format (e.g. 0 0 * * 1,3,5)"), default=3)
+    need_specify_weekday_to_run = BooleanField('Need to specify weekday to run')
+
+    reset_status_at = TextField("Reset Status to Unknown at",
+                default='0:00', validators=[DataRequired()])
     operator = SelectField('Operator', coerce=str, 
             choices=[('bash', 'Bash'),
                      ('sql', 'SQL'),
@@ -39,12 +60,49 @@ class JobForm(Form):
         for field in self:
             if field.type in ('CSRFTokenField', 'HiddenField'):
                 continue
-            if field.name not in ('tags', 'subscriptions', 'submit'):
-                setattr(field, "data", getattr(job, field.name))
-            elif field.name == 'tags':
-                setattr(field, "data", ','.join(tags))
+                
+            if field.name == 'tags':
+                setattr(field, 'data', ','.join(tags))
             elif field.name == 'subscriptions':
-                setattr(field, "data",  ','.join(subscriptions))
+                setattr(field, 'data',  ','.join(subscriptions))
+            elif field.name == 'need_specify_weekday_to_run':
+                setattr(field, 'data', False)
+            elif field.name == 'schedule_interval_text':
+                if not job.schedule_interval.startswith('@'):
+                    setattr(field, 'data', job.schedule_interval)
+                else:
+                    setattr(field, 'data', '')
+            else:
+                setattr(field, 'data', getattr(job, field.name))
+
+    @classmethod
+    def validate_and_prepare_job_args(cls, request, job_args, tags, subscriptions):
+        for k, v in request.form.items():
+            if k in ('tags', 'subscriptions'):
+                continue
+            job_args[k] = v
+
+        if len(request.form['tags']) == 0:
+            tags.append("no-tag")
+        else:
+            tags.extend([t.strip() for t in request.form['tags'].split(',')])
+
+        if len(request.form['subscriptions']):
+            subscriptions.extend(
+                [s.strip() for s in request.form['subscriptions'].split(',')])
+        if job_args['schedule_interval'] == 'other':
+            if not job_args['schedule_interval_text'].isalnum():
+                flash('run interval has to be a number.')
+                return False
+            job_args['schedule_interval'] = job_args['schedule_interval_text']
+        
+        # custom validator  
+        for sub in subscriptions:
+            if '@' not in sub:
+                flash('Subscriptions must be email addresses.')
+                return False
+        return True 
+
 
 class LoginForm(Form):
     email = StringField('Email', validators=[DataRequired(), Email()]) 
@@ -60,11 +118,8 @@ class RegistrationForm(Form):
     submit = SubmitField('Register')
 
     def validate_email(self, field):
-        # if User.query.filter_by(email=field.data).first():
         if RequestHandler.get_user(email=field.data):
             raise ValidationError('Email already registered.')
-
-# class SubscribeForm(Form):
 
 
 
@@ -76,7 +131,8 @@ def index():
     running_tasks = RequestHandler.info_tasks(only_running=True)
     for job in all_active_jobs:
         job.initialize_shortcommand()
-        job.get_local_run_time()
+        job.initialize_short_result()
+        # job.get_local_run_time()
     return render_template('index.html', 
                 all_tags=all_tags,
                 all_active_jobs=all_active_jobs,
@@ -88,33 +144,28 @@ def add_job():
     form = JobForm()
     if request.method == 'POST':
         if form.validate():
-            job_args = {k: v for k, v in request.form.items() \
-                        if k not in ('tags', 'subscriptions')}
-            if len(request.form['tags']) == 0:
-                tags = ["no-tag"]
-            else:
-                tags = [t.strip() for t in request.form['tags'].split(',')]
-
-            if len(request.form['subscriptions']):
-                subscriptions = [s.strip() for s in request.form['subscriptions'].split(',')]
-            else:
-                subscriptions = []
-            added = RequestHandler.add_job(job_args, tags, subscriptions)
-            if added:
-                flash("Job create request for job name {}".format(request.form["name"]), "success")
-                return redirect(url_for('main.index'))
-            else:
-                flash("Job with name {} exists, do you want to edit this job?".format(request.form["name"]), 
-                    "warning")
-                return redirect(url_for('main.edit_job', job_name=form.name.data))
+            job_args = {}
+            tags = []
+            subscriptions = []
+            if JobForm.validate_and_prepare_job_args(
+                        request, job_args, tags, subscriptions):
+                added = RequestHandler.add_job(job_args, tags, subscriptions)
+                if added:
+                    flash("Job create request for job name {}".format(
+                                request.form["name"]), "success")
+                    return redirect(url_for('main.index'))
+                else:
+                    flash("Job with name {} exists, do you want to edit this job?".format(request.form["name"]), 
+                        "warning")
+                    return redirect(url_for('main.edit_job', job_name=form.name.data))
         else:
-            flash("Error: job name and command are required.")
+            flash("Error: {}".format(form.validate()))
     return render_template('add_job.html', form=form, modify=False)
 
 
 @main.route('/jobs/edit/<job_name>', methods=['GET', 'POST'])
 def edit_job(job_name):
-    current_job, tags, _ = RequestHandler.info_job(job_name)
+    current_job, tags, _, _ = RequestHandler.info_job(job_name)
 
     if current_job is None:
         # must be a bug...
@@ -127,19 +178,16 @@ def edit_job(job_name):
     form.name.render_kw = {'disabled': True}
     if request.method == 'POST':
         if form.validate():
-            job_args = {k: v for k, v in request.form.items() if k != 'tags'}
-            job_args['name'] = current_job.name
-            if len(request.form['tags']) == 0:
-                tags = ["no-tag"]
-            else:
-                tags = [t.strip() for t in request.form['tags'].split(",")]
-            if len(request.form['subscriptions']):
-                subscriptions = [s.strip() for s in request.form['subscriptions'].split(',')]
-            else:
-                subscriptions = []
-            if RequestHandler.edit_job(job_args, tags, subscriptions):
-                flash("Edited job {}".format(request.form['name']), "success")
-            return redirect(url_for('main.index'))
+            job_args = {}
+            tags = []
+            subscriptions = []
+            if JobForm.validate_and_prepare_job_args(
+                        request, job_args, tags, subscriptions):
+                job_args['name'] = current_job.name
+                if RequestHandler.edit_job(job_args, tags, subscriptions):
+                    flash("Edited job {}".format(request.form['name']), 
+                            "success")
+                return redirect(url_for('main.index'))
         else:
             flash("Error: job name and command are required.")
     return render_template('add_job.html', form=form, modify=True)
@@ -148,18 +196,18 @@ def edit_job(job_name):
 @main.route('/jobs/<job_name>/<action>', methods=['GET', 'POST'])
 def info_job(job_name, action='info'):
     if action == 'info':
-        job, tags, tasks = RequestHandler.info_job(job_name)
+        job, tags, tasks, alerts = RequestHandler.info_job(job_name)
         job.initialize_shortcommand()
-        job.get_local_run_time()
-        for t in tasks:
-            t.get_local_run_time(job.timezone)
+        job.initialize_short_result()
         return render_template('job.html', job=job, 
-                        tags=tags, tasks=tasks, 
+                        tags=tags, tasks=tasks,
+                        alerts=alerts, 
                         isinstance=isinstance,
                         str=unicode)
     elif action == 'run':
         flash("Force job {} to run now".format(job_name))
         celery_tid = RequestHandler.force_schedule_for_job(job_name)
+        return redirect(url_for('main.info_job', job_name=job_name, action='info'))
     elif action == 'deactivate':
         msg = RequestHandler.change_job_status(job_name, deactivate=True)
         if msg is True:

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import logging
 import sys
 
-from dashboard.db import get_redis_conn
+from dashboard.utils.db import get_redis_conn
 from dashboard.manager import manager
 from dashboard.models import RequestHandler, ScheduleManager 
 

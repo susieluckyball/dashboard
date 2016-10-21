@@ -1,17 +1,16 @@
 from contextlib import contextmanager
 from functools import wraps
+import logging
 import pyodbc
+import re
 from redis import StrictRedis
 from sqlalchemy import create_engine 
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from dashboard.config import config
-from dashboard.utils import Singleton
+from dashboard.configuration import conf
+from dashboard.utils.miscellaneous import Singleton
 
-#
-# kk, I know how messy this looks...
-#
-
+logger = logging.getLogger(__name__)
 
 # convert from bytes to string...
 class RedisConn(StrictRedis):
@@ -31,42 +30,53 @@ class RedisConn(StrictRedis):
         v = v.decode() if isinstance(v, bytes) else v
         return v
 
-_redis_conn = RedisConn(host='localhost', port=6379, db=0)
-
-
-
-# This is for dev
-SQL_ALCHEMY_CONN = config['default'].SQLALCHEMY_DATABASE_URI
-
-engine = None
+_redis_conn = None 
+engine = None 
 session_factory = None
 
+def configure_databases():
+    # config manager heart beat 
+    manager_heart_beat = conf.get('manager', 'send_heart_beat')
+    global _redis_conn
+    if manager_heart_beat.startswith('redis'):
+        m = re.compile('redis://(?P<host>\w+):(?P<port>\d+)/(?P<db>\d+)')
+        redis_cfg = m.match(manager_heart_beat).groupdict()
+        try:
+            _redis_conn = RedisConn(host=redis_cfg['host'],
+                    port=int(redis_cfg['port']),
+                    db=int(redis_cfg['db']))
+        except RuntimeError:    # should have 
+            logger.exception('Cannot config redis with {}'.format(
+                        manager_heart_beat))
 
-# enterprise = None
-
-# def configure_sql_server():
-
-def configure_orm():
+    # config webserver db 
     global engine
-    global session_factory
+    global session_factory    
     engine_args = {}
-    if 'sqlite' not in SQL_ALCHEMY_CONN:
+    web_db = conf.get('webserver', 'database')
+    if 'sqlite' not in web_db:
         # Engine args not supported by sqlite
-        engine_args['pool_size'] = conf.getint('core', 'SQL_ALCHEMY_POOL_SIZE')
+        engine_args['pool_size'] = conf.getint('core', 'sqlalchemy_pool_size')
         engine_args['pool_recycle'] = conf.getint('core',
-                                                  'SQL_ALCHEMY_POOL_RECYCLE')
+                                                  'sqlalchemy_pool_recycle')
 
-    engine = create_engine(SQL_ALCHEMY_CONN, **engine_args)
+    engine = create_engine(web_db, **engine_args)
     session_factory = scoped_session(
         sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
-configure_orm()
+configure_databases()
+
+
+#####################
+# Interfaces 
+#####################
 
 def get_redis_conn():
     return _redis_conn
 
 @contextmanager
 def get_sql_session():
+    """ This webserver db connect session """
     session = session_factory()
     session._model_changes = {}
     try:
@@ -80,9 +90,13 @@ def get_sql_session():
 
 
 @contextmanager
-def open_sql_server_session(config, db, commit=False):
-    # This is for dev
-    conn = pyodbc.connect(config['default'].DB[db])
+def open_sql_server_session(db, commit=False):
+    """ This is data sql server session """
+    driver = conf.get('database', 'DRIVER')
+    server = conf.get('database', db)
+    conn_str = "Driver={{driver}};Server={server};Database={db};Trusted_Connection=Yes;".format(
+                driver=driver, server=server, db=db)
+    conn = pyodbc.connect(conn_str)
     cursor = conn.cursor()
     try:
         yield cursor
@@ -141,3 +155,7 @@ def provide_session(func):
 #         cursor = conn.cursor()
 #         res = cursor.execute(query)
 #     return cursor
+
+
+
+

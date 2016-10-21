@@ -2,9 +2,15 @@
 
 {% block page_content %}
 <div class="container-fluid">
-  <div class="page-header"><h1> {{ job.name }} <a href="{{ url_for('main.edit_job', job_name=job.name ) }}"> [edit] </a> </h1></span></div>
+  <div class="page-header">
+    <h1> {{ job.name }} 
+      <a href="{{ url_for('main.edit_job', job_name=job.name ) }}" class="small glyphicon glyphicon-pencil" data-toggle="tooltip" title="info/edit"></a>
+      <a href="{{ url_for('main.info_job', job_name=job.name, action='run' ) }}" class="small glyphicon glyphicon-play" data-toggle="tooltip" title="run now"></a>
+    </h1>
+  </div>
   <div class="row content">
   <div class="col-sm-7">
+    <h3>Recent Tasks</h3>
     <table id="sortable_desc_on_ts" class="table table-hover is-breakable">
       <thead>
         <tr>
@@ -18,17 +24,17 @@
           {% if task.state == 'SUCCESS' %}
           <!-- This is hardcoded for datacheck output -->
             {% if isinstance(task.result, str) and task.result.startswith('1') %}
-          <td class="success">{{ task.local_execution_date }}</td>
+          <td class="success">{{ task.execution_date }}</td>
           <td class="success">{{ task.result }}</td>
             {% else %}
-          <td class="danger">{{ task.local_execution_date }}</td>
+          <td class="danger">{{ task.execution_date }}</td>
           <td class="danger">{{ task.result }}</td>
             {% endif %}
           {% elif task.state in ("PENDING", "STARTED") %}
-          <td class="info">{{ task.local_execution_date }}</td>
+          <td class="info">{{ task.execution_date }}</td>
           <td class="info">{{ task.state }}</td>
           {% else %}
-          <td class="warning">{{ task.local_execution_date }}</td>
+          <td class="warning">{{ task.execution_date }}</td>
           <td class="warning">Task fail: {{ task.result }}</td>
           {% endif %}
         </tr>
@@ -57,14 +63,29 @@
           <td>Command</td>
           <td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
         </tr>
+        {% if job.operator == 'sql' %}
+        <tr>
+          <td>Database</td>
+          <td>{{ job.database }}</td> 
+        </tr>
+        {% endif %}
         <tr>
           <td>Run Interval</td>
           <td> {{ job.schedule_interval }} </td>
         </tr>
         <tr>
           <td>Next Run</td>
-          <td>{{ job.local_next_run }}</td> 
+          <td>{{ job.next_run_local_ts }}</td> 
         </tr>
+        <tr>
+          <td>Subscriptions</td>
+          <td>
+            {% for sub in alerts %}
+            {{sub}}<br>
+            {% endfor %}
+          </td> 
+        </tr>
+
       </tbody>
       </table>
     

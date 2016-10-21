@@ -3,22 +3,24 @@ from celery import states as celery_states
 import shlex
 import subprocess
 
-from dashboard.config import config
-from dashboard.db import open_sql_server_session
-
-class CeleryConfig(object):
-    CELERY_ACCEPT_CONTENT = ['json', 'pickle']
-    CELERYD_PREFETCH_MULTIPLIER = 1
-    CELERY_ACKS_LATE = True
-
-    CELERY_BROKER_URL = 'redis://localhost:6379/0'
-    CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-
-    # CELERY_DEFAULT_QUEUE = DEFAULT_QUEUE
-    # CELERY_DEFAULT_EXCHANGE = DEFAULT_QUEUE
+from dashboard.configuration import conf
+from dashboard.utils.db import open_sql_server_session
 
 
-worker = Celery('dashboard', broker=CeleryConfig.CELERY_BROKER_URL)
+
+# class CeleryConfig(object):
+#     CELERY_ACCEPT_CONTENT = ['json', 'pickle']
+#     CELERYD_PREFETCH_MULTIPLIER = 1
+#     CELERY_ACKS_LATE = True
+
+#     CELERY_BROKER_URL = 'redis://localhost:6379/0'
+#     CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+#     # CELERY_DEFAULT_QUEUE = DEFAULT_QUEUE
+#     # CELERY_DEFAULT_EXCHANGE = DEFAULT_QUEUE
+
+
+worker = Celery('dashboard', broker=conf.get('celery', 'celery_broker_url'))
         # backend=CeleryConfig.CELERY_RESULT_BACKEND)
 worker.conf.update(CELERY_TRACK_STARTED=True)
 worker.conf.update(CELERY_RESULT_BACKEND='redis')
@@ -37,7 +39,7 @@ def execute_command(command):
 def execute_sql(sql, database):
     try:
         # this is dev 
-        with open_sql_server_session(config, database) as cursor:
+        with open_sql_server_session(database.upper()) as cursor:
             res = cursor.execute(sql).fetchall()
             if len(res) == 1:
                 res = ", ".join([str(i) for i in res[0]])

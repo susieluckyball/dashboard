@@ -1,23 +1,27 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-
 import functools
 import logging
-import pandas as pd
+import pandas as pd 
 from time import sleep
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, Boolean, ForeignKey, PickleType,
-    Index, Float)
+        Column, Integer, String, DateTime, Text, Boolean, Float)
 from sqlalchemy import func, or_, and_
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import reconstructor, relationship, synonym
+
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from dashboard.celery_worker import execute_command, execute_sql
-from dashboard.db import engine, get_redis_conn, get_sql_session, provide_session#, run_query_on_sql_server
-from dashboard.email_utils import send_email
-from dashboard.utils import convert_to_utc, convert_to_local
+from dashboard.utils.date import (convert_to_utc, 
+        get_cron_schedule_interval, get_next_run_ts)
+from dashboard.utils.db import (engine, get_redis_conn, 
+        provide_session, get_sql_session)
+from dashboard.utils.emails import send_email
+
+# from dashboard.utils import (convert_to_utc, convert_to_local, 
+#                             get_cron_schedule_interval)
 
 Base = declarative_base()
 ID_LEN = 250
@@ -44,7 +48,7 @@ class TaskInstance(Base):
     def __init__(self, job):
         self.job_id = job.id 
         self.job_name = job.name
-        self.execution_date = job.next_run_ts 
+        self.execution_date = job.next_run_local_ts 
         self.operator = job.operator 
         self.command = job.command 
         self.state = 'PENDING'
@@ -66,9 +70,9 @@ class TaskInstance(Base):
         return "<TaskInstance(job_id={}, command={}, exe_ts={}, status={})>".format(
                 self.job_id, self.command, self.execute_ts, self.status)
 
-    def get_local_run_time(self, tz):
-        self.local_execution_date =  convert_to_local(
-                self.execution_date, tz)
+    # def get_local_run_time(self, tz):
+    #     self.local_execution_date =  convert_to_local(
+    #             self.execution_date, tz)
 
 
 @functools.total_ordering
@@ -77,55 +81,71 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), index=True)
+    # owner = Column(String(50), nullable=True)    # this is only a placeholder for now
     timezone = Column(String(20))
     update_time = Column(DateTime)
-    start_dt = Column(DateTime)
-    end_dt = Column(DateTime, nullable=True)
+    start_dt = Column(DateTime)   # local dt
+    end_dt = Column(DateTime, nullable=True)   # local dt
     active = Column(Boolean)
-    schedule_interval = Column(Integer)
+    block_until = Column(DateTime, nullable=True)
+    block_by = Column(String(50), nullable=True)
+    block_msg = Column(String(200), nullable=True)
+    schedule_interval = Column(String(20))
+    reset_status_at = Column(String(20))
+
     operator = Column(String(10)) # bash, python, sql, etc
     database = Column(String(20), nullable=True)
     command = Column(String)
-    next_run_ts = Column(DateTime)
+    next_run_local_ts = Column(DateTime)    # local dt
     last_task_result = Column(String(1000))
 
-    def __init__(self, name, timezone, start_dt=None, end_dt=None, 
-                active=True, schedule_interval=None, 
-                operator='bash', database=None,
-                command='sleep 10',
-                next_run_ts=None, **kwargs):
+    def __init__(self, name, timezone, 
+                start_dt, end_dt, 
+                schedule_interval, 
+                reset_status_at,
+                operator, database,
+                command, **kwargs):
         self.name = name
         self.timezone = timezone
-        self.update_time = datetime.utcnow() 
+        self.update_time = datetime.utcnow()
 
         if start_dt is None or start_dt == '':
-            self.start_dt = datetime.utcnow()
+            self.start_dt = pd.to_datetime(datetime.utcnow()
+                ).tz_localize('UTC').astimezone(timezone
+                ).replace(tzinfo=None)
         else:
-            self.start_dt = convert_to_utc(start_dt, timezone)
+            self.start_dt = pd.to_datetime(start_dt)
 
         if end_dt is None or end_dt == '':
             self.end_dt = None 
         else:
-            self.end_dt = convert_to_utc(end_dt, timezone)
+            self.end_dt = pd.to_datetime(self.end_dt)
 
-        self.active = active
-        if schedule_interval is None or schedule_interval == "":
-            self.schedule_interval = 60 * 60 * 24 # default daily job
-        else:
-            self.schedule_interval = int(schedule_interval)
+        self.active = True
+        self.block_util = None 
+        self.block_by = None
+
+        # TODO:
+        # will take care of 'weekday to run'
+        self.schedule_interval = get_cron_schedule_interval(
+                schedule_interval, self.start_dt, weekday_to_run=None)
+
+        self.reset_status_at = reset_status_at
         self.operator = operator
         self.database = database
         self.command = command
-        if start_dt is not None:
-            self.next_run_ts = self.start_dt
-        else:
-            self.next_run_ts = next_run_ts or datetime.utcnow()
+
+        self.next_run_local_ts = self.start_dt
+
 
     def schedule_task(self, session, force_run=False):
         if force_run:
-            orig_next_run = self.next_run_ts
-            self.next_run_ts = datetime.utcnow()
-        if datetime.utcnow() < self.next_run_ts:
+            orig_next_run = self.next_run_local_ts
+            self.next_run_local_ts = pd.to_datetime(datetime.utcnow()
+                ).tz_localize('UTC').astimezone(self.timezone
+                ).replace(tzinfo=None)
+        if datetime.utcnow() < convert_to_utc(
+                self.next_run_local_ts, self.timezone):
             return None
         task = TaskInstance(job=self)
         if task.operator == 'bash':
@@ -136,24 +156,27 @@ class Job(Base):
         task.task_id = celery_task.id 
         session.add(task)
         if not force_run:
-            logger.info("schedule task for job {} at utc {}".format(self.name, self.next_run_ts))
-            self.next_run_ts += timedelta(seconds=self.schedule_interval)
+            logger.info("schedule task for job {} at {} {}".format(
+                        self.name, self.next_run_local_ts, self.timezone))
+            self.next_run_local_ts = get_next_run_ts(self.schedule_interval)
         else:
             logger.info("schedule task for job {} at utc {}".format(self.name, datetime.utcnow()))
-            self.next_run_ts = orig_next_run
+            self.next_run_local = orig_next_run
         session.commit()
         return celery_task.id
 
-    def initialize_shortcommand(self):
-        max_size = 30
+    def initialize_shortcommand(self, max_size=30):
         if len(self.command) > max_size:
             self.short_command = self.command[:max_size] + "..."
         else:
             self.short_command = self.command
 
-    def get_local_run_time(self):
-        self.local_next_run =  convert_to_local(
-                self.next_run_ts, self.timezone)
+    def initialize_short_result(self, max_size=30):
+        self.short_result = self.last_task_result
+        if self.last_task_result is not None:
+            if len(self.last_task_result) > max_size:
+                self.short_result = self.last_task_result[:max_size] + "..."
+
 
 
     def __eq__(self, other):
@@ -438,7 +461,11 @@ class RequestHandler:
                     TaskInstance.execution_date.desc()).limit(
                     max_task_num).all()
             tasks = sorted(tasks)
-            return job, tags, tasks
+            alerts = session.query(JobAlert.email).filter(
+                    JobAlert.job_name==job_name).order_by(
+                    JobAlert.email).all()
+            alerts = [a[0] for a in alerts]
+            return job, tags, tasks, alerts
         return None, None, None
 
     @classmethod

@@ -25,6 +25,10 @@
             {{ wtf.form_field(form.start_dt) }}
             {{ wtf.form_field(form.end_dt) }}
             {{ wtf.form_field(form.schedule_interval) }}
+            <div id="schedule_interval_text">{{ wtf.form_field(form.schedule_interval_text)}}</div>
+            {{ wtf.form_field(form.need_specify_weekday_to_run )}}
+            {{ wtf.form_field(form.reset_status_at) }}
+            
             <div>{{ wtf.form_field(form.operator) }}</div>
             <div id='db'>{{ wtf.form_field(form.database)}}</div>
             <div class="form-group "><label class="control-label" for="tags">Tags</label><br>
@@ -62,6 +66,19 @@ $(function() {
             $('#db').show(); 
         } else {
             $('#db').hide(); 
+        } 
+    });
+});
+</script>
+
+<script type="text/javascript">
+$(function() {
+    $('#schedule_interval_text').hide(); 
+    $('#schedule_interval').change(function(){
+        if($('#schedule_interval').val() == 'other') {
+            $('#schedule_interval_text').show(); 
+        } else {
+            $('#schedule_interval_text').hide(); 
         } 
     });
 });

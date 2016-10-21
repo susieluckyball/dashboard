@@ -15,10 +15,12 @@
 <div class="container-fluid">
 	<div class="row content">
 		<div class="col-sm-10">
-			<h4 class="text-success"> Tags: 
+			<h4>
+			<div class="glyphicon glyphicon-tags text-success"> </div>
 			{% for t in all_tags %}
-			<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>
-			{% endfor %}	</h4>		
+			<a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm"> {{ t }} </a>
+			{% endfor %}	
+			</h4>		
 			<hr>
 
 			<table id="sortable" class="table table-hover is-breakable">
@@ -44,12 +46,12 @@
 				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info') }}">{{ job.name }}</a></td>
 				<td>{{ job.timezone }}</td>
 				<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
-				{% if not job.last_task_result %}
-				<td class="warning">{{ job.last_task_result }}</td>
-				{% elif job.last_task_result.startswith('1') %}
-				<td class="success">{{ job.last_task_result }}</td>
+				{% if not job.short_result %}
+				<td class="warning">{{ job.short_result }}</td>
+				{% elif job.short_result.startswith('1') %}
+				<td class="success">{{ job.short_result }}</td>
 				{% else %}
-				<td class="danger">{{ job.last_task_result }}</td>
+				<td class="danger">{{ job.short_result }}</td>
 				{% endif %}
 				<td>{{ job.local_next_run }}</td> 
 				<td class="dropdown">
