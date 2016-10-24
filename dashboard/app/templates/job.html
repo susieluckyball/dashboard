@@ -3,11 +3,36 @@
 {% block page_content %}
 <div class="container-fluid">
   <div class="page-header">
-    <h1> {{ job.name }} 
-      <a href="{{ url_for('main.edit_job', job_name=job.name ) }}" class="small glyphicon glyphicon-pencil" data-toggle="tooltip" title="info/edit"></a>
-      <a href="{{ url_for('main.info_job', job_name=job.name, action='run' ) }}" class="small glyphicon glyphicon-play" data-toggle="tooltip" title="run now"></a>
+    <h1> 
+      <span class='danger'>{{ job.name }}</span>
     </h1>
+
   </div>
+
+  <div>
+    <h3>
+      <span><a href="{{ url_for('main.edit_job', job_name=job.name ) }}" class="button btn btn-info" data-toggle="tooltip" title="info/edit">
+      <span  class="glyphicon glyphicon-pencil"></span> Edit </a>
+      </span>
+
+      <span><a href="{{ url_for('main.info_job', job_name=job.name, action='run' ) }}" class="button btn btn-success" data-toggle="tooltip" title="run now">
+        <span class="glyphicon glyphicon-play"></span> Run </a>
+      </span>
+
+      <span><a href="{{ url_for('main.info_job', job_name=job.name, action='delete' ) }}" class="button btn btn-danger" data-toggle="tooltip" title="delete job">
+        <span class="glyphicon glyphicon-trash"></span> Delete </a>
+      </span>
+
+<!--       <span><a href="{{ url_for('main.info_job', job_name=job.name, action='deactivate' ) }}" class="button btn btn-warning" data-toggle="tooltip" title="deactivate" color='grey'>
+        <span class="glyphicon glyphicon-eye-close"></span> Deactivate </a>
+      </span> -->
+
+      <span><a href="{{ url_for('main.info_job', job_name=job.name, action='block' ) }}" class="button btn btn-warning" data-toggle="tooltip" title="block">
+        <span class="glyphicon glyphicon-eye-close"></span> Block </a>
+      </span>
+    </h3>
+  </div>
+
   <div class="row content">
   <div class="col-sm-7">
     <h3>Recent Tasks</h3>
@@ -56,6 +81,10 @@
       <table class="table table-hover is-breakable">
       <tbody>
         <tr>
+          <td>Active</td>
+          <td>{{ job.active }}</td>
+        </tr>
+        <tr>
           <td>Timezone</td>
           <td>{{ job.timezone }}</td>
         </tr>
@@ -72,6 +101,10 @@
         <tr>
           <td>Run Interval</td>
           <td> {{ job.schedule_interval }} </td>
+        </tr>
+        <tr>
+          <td>Reset Time</td>
+          <td> {{ job.reset_status_at.time() }} </td>
         </tr>
         <tr>
           <td>Next Run</td>

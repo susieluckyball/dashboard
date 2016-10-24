@@ -18,9 +18,8 @@
 					<th width="10%">Activity</th>
 					<th width="20%">Job Name</th>
 					<th width="15%">Timezone</th>
-					<th width="30%">Command</th>
-					<th width="15%">Next Run UTC</th>
-					<th></th>
+					<th width="25%">Command</th>
+					<th width="20%">Next Run</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -33,17 +32,8 @@
 			 	{% endif %}
 				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info' ) }}">{{ job.name }}</a></td>
 				<td>{{ job.timezone }}</td>
-				<td>{{ job.command }} </td>
-				<td>{{ job.next_run_ts }}</td> 
-				<td class="dropdown">
-			        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
-			        <ul class="dropdown-menu">
-		          		<li><a href="#">Schedule Now</a></li>
-						<li><a href="#">Edit</a></li>
-						<li><a href="#">Deactivate</a></li>
-						<li><a href="#">Delete</a></li>
-			       	</ul>
-			    </td> 
+				<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
+				<td>{{ job.next_run_local_ts }}</td> 
 			</tr>
 			{% endfor %}
 			</tbody>
@@ -53,7 +43,7 @@
 
 	<div class="col-sm-4">
 		<div> 
-			<h3>Subscriptions: 
+			<h3>Subscriptions:<br> 
 				{% if current_user.is_authenticated() %}
 					{% if current_user.is_subscribed_to(name=tag_name, job=False) %}
 					<a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='tag', name=tag_name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a>
@@ -80,7 +70,7 @@
 			<form>
 				<div class="form-group">
 					<input type="text" name="email">
-					<button class="btn btn-primary " name="add_subscription" type="submit">Add</button>
+					<button class="btn btn-primary " name="add_subscription" type="submit">Add Email</button>
 				</div>				
 			</form>
 		</div>

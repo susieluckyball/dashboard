@@ -2,27 +2,24 @@ from flask import Flask, request, render_template, redirect, flash, url_for, jso
 from flask.ext.wtf import Form 
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import partial
-from wtforms import (BooleanField, PasswordField, SelectField, SelectMultipleField, 
-                    StringField, SubmitField, TextAreaField, TextField, widgets)
+from wtforms import (BooleanField, PasswordField, SelectField, 
+                    StringField, SubmitField, TextAreaField, TextField)
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Required
 
 from app import main, auth, login_manager
 from models import RequestHandler
+from dashboard.utils.date import (cron_presets, valid_crontab_string)
 
-
-class MultiCheckboxField(SelectMultipleField):
-    widget = widgets.ListWidget(prefix_label=False)
-    option_widget = widgets.CheckboxInput()
 
 
 class JobForm(Form):
     name = TextField('Name',  validators=[DataRequired()])
     timezone = SelectField('Timezone', coerce=str, choices=[
-            ("US/Eastern","US/Eastern"), 
-            ("US/Central","US/Central"), 
-            ("Europe/London","Europe/London")], 
+            ('US/Eastern','US/Eastern'), 
+            ('US/Central','US/Central'), 
+            ('Europe/London','Europe/London')], 
             validators=[DataRequired()])
-    start_dt = TextField('Start Datetime (default now)')
+    start_dt = TextField('Start Datetime (default now)', id='start_dt')
     end_dt = TextField('End Datetime (default None)')
     schedule_interval = SelectField('Schedule Frequency', 
             choices=[('@daily', 'Daily'),
@@ -32,11 +29,11 @@ class JobForm(Form):
                     ('other', 'Other')],
             id='schedule_interval',
             validators=[DataRequired()])
-    schedule_interval_text = TextField(("Specify run interval in hours or "
-            "in crontab time format (e.g. 0 0 * * 1,3,5)"), default=3)
-    need_specify_weekday_to_run = BooleanField('Need to specify weekday to run')
-
-    reset_status_at = TextField("Reset Status to Unknown at",
+    weekday_to_run = TextField('Specify weekdays to run (e.g. input 1,5,7 for Mon, Fri and Sun)')
+    schedule_interval_crontab = TextField(('(Note: filling this will OVERWRITE previous selection) '
+            'Specify run interval '
+            'in crontab time format (e.g. 0 6 * * 1,3,5)'))
+    reset_status_at = TextField('Reset Status to Unknown at',
                 default='0:00', validators=[DataRequired()])
     operator = SelectField('Operator', coerce=str, 
             choices=[('bash', 'Bash'),
@@ -59,19 +56,19 @@ class JobForm(Form):
     def add_placeholder(self, job, tags, subscriptions):
         for field in self:
             if field.type in ('CSRFTokenField', 'HiddenField'):
-                continue
-                
+                continue        
             if field.name == 'tags':
                 setattr(field, 'data', ','.join(tags))
             elif field.name == 'subscriptions':
                 setattr(field, 'data',  ','.join(subscriptions))
-            elif field.name == 'need_specify_weekday_to_run':
-                setattr(field, 'data', False)
-            elif field.name == 'schedule_interval_text':
-                if not job.schedule_interval.startswith('@'):
-                    setattr(field, 'data', job.schedule_interval)
-                else:
-                    setattr(field, 'data', '')
+            elif field.name == 'schedule_interval':
+                setattr(field, 'data', 'other')
+            elif field.name == 'weekday_to_run':
+                setattr(field, 'data', '')
+            elif field.name == 'schedule_interval_crontab':
+                setattr(field, 'data', job.schedule_interval)
+            elif field.name == 'submit':
+                continue
             else:
                 setattr(field, 'data', getattr(job, field.name))
 
@@ -82,21 +79,32 @@ class JobForm(Form):
                 continue
             job_args[k] = v
 
+        # split tags and subscriptions
         if len(request.form['tags']) == 0:
             tags.append("no-tag")
         else:
             tags.extend([t.strip() for t in request.form['tags'].split(',')])
-
         if len(request.form['subscriptions']):
             subscriptions.extend(
-                [s.strip() for s in request.form['subscriptions'].split(',')])
-        if job_args['schedule_interval'] == 'other':
-            if not job_args['schedule_interval_text'].isalnum():
-                flash('run interval has to be a number.')
+                [s.strip() for s in request.form['subscriptions'].split(',')])        
+
+        # organize optional fields
+        if job_args['schedule_interval_crontab'] != '':
+            if not valid_crontab_string(job_args['schedule_interval_crontab']):
+                flash('Schedule interval crontab has to be a valid crontab string')
                 return False
-            job_args['schedule_interval'] = job_args['schedule_interval_text']
+
+        elif job_args['schedule_interval'] == 'other':
+            try:
+                weekday_to_run = [int(i.strip()) for i in job_args['weekday_to_run'].split(',')]
+                assert all([i > 0 and i <= 7 for i in weekday_to_run])
+            except:
+                flash('Weekday-to-run has to be a list of weekdays (1-7)')
+                return False
+
+            job_args['weekday_to_run'] = weekday_to_run
         
-        # custom validator  
+        # validate
         for sub in subscriptions:
             if '@' not in sub:
                 flash('Subscriptions must be email addresses.')
@@ -234,6 +242,8 @@ def info_tag(tag_name):
     if email is None:
         jobs = RequestHandler.get_jobs_by_tag(only_active=False, tag_name=tag_name)
         subscribe = RequestHandler.get_subscribed(inst_type='tag', name=tag_name)
+        for job in jobs:
+            job.initialize_shortcommand()
         return render_template('tag.html', tag_name=tag_name, 
                     jobs=jobs, emails=subscribe)
     else:

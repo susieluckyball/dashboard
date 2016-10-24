@@ -24,9 +24,11 @@
             {{ wtf.form_field(form.timezone) }}
             {{ wtf.form_field(form.start_dt) }}
             {{ wtf.form_field(form.end_dt) }}
+
             {{ wtf.form_field(form.schedule_interval) }}
-            <div id="schedule_interval_text">{{ wtf.form_field(form.schedule_interval_text)}}</div>
-            {{ wtf.form_field(form.need_specify_weekday_to_run )}}
+            <div id="weekday_to_run">{{ wtf.form_field(form.weekday_to_run) }}</div>
+            {{ wtf.form_field(form.schedule_interval_crontab) }}
+
             {{ wtf.form_field(form.reset_status_at) }}
             
             <div>{{ wtf.form_field(form.operator) }}</div>
@@ -59,6 +61,29 @@
 <script src="{{ url_for('static', filename='js/bootstrap-tagsinput.min.js') }}"></script>
 
 <script type="text/javascript">
+
+function hide_weekday_to_run(){
+    var schedule_interval = document.getElementById('schedule_interval').value;
+    return schedule_interval != 'other';
+}
+
+$(document).ready(function(){
+    if (hide_weekday_to_run()) {
+        $('#weekday_to_run').hide();
+    } else {
+        $('#weekday_to_run').show();
+    }
+});
+
+$('#schedule_interval').change(function(){
+    if (hide_weekday_to_run()) {
+        $('#weekday_to_run').hide();
+    } else {
+        $('#weekday_to_run').show();
+    }
+});
+
+
 $(function() {
     $('#db').hide(); 
     $('#operator').change(function(){
@@ -69,18 +94,6 @@ $(function() {
         } 
     });
 });
-</script>
 
-<script type="text/javascript">
-$(function() {
-    $('#schedule_interval_text').hide(); 
-    $('#schedule_interval').change(function(){
-        if($('#schedule_interval').val() == 'other') {
-            $('#schedule_interval_text').show(); 
-        } else {
-            $('#schedule_interval_text').hide(); 
-        } 
-    });
-});
 </script>
 {%- endblock scripts %}

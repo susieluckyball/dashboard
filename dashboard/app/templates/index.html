@@ -30,32 +30,40 @@
 					<th width="13%">Job Name</th>
 					<th width="12%">Timezone</th>
 					<th width="20%">Command</th>
-					<th width="20%">Last Execution</th>
-					<th width="15%">Next Run</th>
-					<th width="20%"></th>
+					<th width="10%">Status</th>
+					<!-- <th width="20%">Last Execution</th> -->
+					<th width="20%">Next Run</th>
+					<th width="15%">Actions</th>
 				</tr>
 			</thead>
 			<tbody>
 			{% for job in all_active_jobs %}
-			 <tr>
+			{% if job.status_map[job.status] == 'unknown'%}
+			 <tr class='warning'>
+			{% elif job.status_map[job.status] == 'fail'%}
+			 <tr class='danger'>
+			 {% else %}
+			 <tr class='success'>
+			 {% endif %}
 			 	{% if job.active %}
-		 		<td class="success">Active</td> 
+		 		<td>Active</td> 
 		 		{% else %}
-		 		<td class="warning">Inactive</td>
+		 		<td>Inactive</td>
 		 		{% endif %}
 				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info') }}">{{ job.name }}</a></td>
 				<td>{{ job.timezone }}</td>
 				<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
-				{% if not job.short_result %}
+				<td>{{ job.status_map[job.status] }}</td>
+<!-- 				{% if not job.short_result %}
 				<td class="warning">{{ job.short_result }}</td>
 				{% elif job.short_result.startswith('1') %}
 				<td class="success">{{ job.short_result }}</td>
 				{% else %}
 				<td class="danger">{{ job.short_result }}</td>
-				{% endif %}
-				<td>{{ job.local_next_run }}</td> 
+				{% endif %} -->
+				<td>{{ job.next_run_local_ts }}</td> 
 				<td class="dropdown">
-			        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Action <b class="caret"></b></a>
+			        <a href="#" class="dropdown-toggle" data-toggle="dropdown"><span class="glyphicon glyphicon-cog"></span></a>
 			        <ul class="dropdown-menu">
 		          		<li><a href="{{ url_for('main.info_job', job_name=job.name, action='run') }}">Schedule Now</a></li>
 						<li><a href="{{ url_for('main.edit_job', job_name=job.name ) }}">Edit</a></li>

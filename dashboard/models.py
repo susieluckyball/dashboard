@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import functools
 import logging
 import pandas as pd 
@@ -20,8 +20,6 @@ from dashboard.utils.db import (engine, get_redis_conn,
         provide_session, get_sql_session)
 from dashboard.utils.emails import send_email
 
-# from dashboard.utils import (convert_to_utc, convert_to_local, 
-#                             get_cron_schedule_interval)
 
 Base = declarative_base()
 ID_LEN = 250
@@ -45,10 +43,10 @@ class TaskInstance(Base):
     task_id = Column(String(ID_LEN))
     result = Column(String(1000))
 
-    def __init__(self, job):
+    def __init__(self, job, execution_date=None):
         self.job_id = job.id 
         self.job_name = job.name
-        self.execution_date = job.next_run_local_ts 
+        self.execution_date = execution_date or job.next_run_local_ts 
         self.operator = job.operator 
         self.command = job.command 
         self.state = 'PENDING'
@@ -70,10 +68,6 @@ class TaskInstance(Base):
         return "<TaskInstance(job_id={}, command={}, exe_ts={}, status={})>".format(
                 self.job_id, self.command, self.execute_ts, self.status)
 
-    # def get_local_run_time(self, tz):
-    #     self.local_execution_date =  convert_to_local(
-    #             self.execution_date, tz)
-
 
 @functools.total_ordering
 class Job(Base):
@@ -91,17 +85,28 @@ class Job(Base):
     block_by = Column(String(50), nullable=True)
     block_msg = Column(String(200), nullable=True)
     schedule_interval = Column(String(20))
-    reset_status_at = Column(String(20))
+    reset_status_at = Column(DateTime)
 
     operator = Column(String(10)) # bash, python, sql, etc
     database = Column(String(20), nullable=True)
     command = Column(String)
     next_run_local_ts = Column(DateTime)    # local dt
+    last_execution_ts = Column(DateTime, nullable=True)
     last_task_result = Column(String(1000))
+    status = Column(Integer)
+
+    status_enum = {'fail': 0,
+                'success': 1,
+                'unknown': 2}
+    status_map = {0: 'fail',
+                1: 'success',
+                2: 'unknown'}
 
     def __init__(self, name, timezone, 
                 start_dt, end_dt, 
-                schedule_interval, 
+                schedule_interval,
+                weekday_to_run,
+                schedule_interval_crontab, 
                 reset_status_at,
                 operator, database,
                 command, **kwargs):
@@ -125,29 +130,42 @@ class Job(Base):
         self.block_util = None 
         self.block_by = None
 
-        # TODO:
-        # will take care of 'weekday to run'
-        self.schedule_interval = get_cron_schedule_interval(
-                schedule_interval, self.start_dt, weekday_to_run=None)
+        # figure out the schedule interval crontab...
+        if len(schedule_interval_crontab):
+            self.schedule_interval = schedule_interval_crontab
+        else:
+            self.schedule_interval = get_cron_schedule_interval(
+                    schedule_interval, self.start_dt, weekday_to_run)
 
-        self.reset_status_at = reset_status_at
+        self.reset_status_at = pd.to_datetime(reset_status_at)
         self.operator = operator
         self.database = database
         self.command = command
 
         self.next_run_local_ts = self.start_dt
+        self.status = self.status_enum['unknown']
 
+    def set_status(self, session, status='unknown'):
+        self.status = self.status_enum.get(status, 
+                        self.status_enum['unknown'])
+        session.commit()
 
     def schedule_task(self, session, force_run=False):
         if force_run:
-            orig_next_run = self.next_run_local_ts
-            self.next_run_local_ts = pd.to_datetime(datetime.utcnow()
+            # orig_next_run = self.next_run_local_ts
+            utcnow = datetime.utcnow()
+            current_run = pd.to_datetime(utcnow
                 ).tz_localize('UTC').astimezone(self.timezone
                 ).replace(tzinfo=None)
-        if datetime.utcnow() < convert_to_utc(
-                self.next_run_local_ts, self.timezone):
-            return None
-        task = TaskInstance(job=self)
+            task = TaskInstance(job=self, execution_date=current_run)
+            logger.info("schedule task for job {} at utc {}".format(
+                        self.name, utcnow))
+
+        else:
+            if datetime.utcnow() < convert_to_utc(
+                    self.next_run_local_ts, self.timezone):
+                return None
+            task = TaskInstance(job=self)
         if task.operator == 'bash':
             celery_task = execute_command.apply_async(args=[task.command])
         elif task.operator == 'sql':
@@ -158,10 +176,8 @@ class Job(Base):
         if not force_run:
             logger.info("schedule task for job {} at {} {}".format(
                         self.name, self.next_run_local_ts, self.timezone))
-            self.next_run_local_ts = get_next_run_ts(self.schedule_interval)
-        else:
-            logger.info("schedule task for job {} at utc {}".format(self.name, datetime.utcnow()))
-            self.next_run_local = orig_next_run
+            self.next_run_local_ts = get_next_run_ts(self.schedule_interval, self.next_run_local_ts)
+
         session.commit()
         return celery_task.id
 
@@ -177,8 +193,6 @@ class Job(Base):
             if len(self.last_task_result) > max_size:
                 self.short_result = self.last_task_result[:max_size] + "..."
 
-
-
     def __eq__(self, other):
         return self.name == other.name 
 
@@ -187,7 +201,7 @@ class Job(Base):
 
     def __repr__(self):
         return "<Job(name={}, active={}, next_run={})>".format(
-            self.name, self.active, self.next_run_ts)
+            self.name, self.active, self.next_run_local_ts)
 
 
 @functools.total_ordering
@@ -308,18 +322,22 @@ class ScheduleManager(object):
         logger.info("Start manager")
 
 
-    def start(self, poll_interval=30):
+    def start(self, poll_interval=20):
         while True:
             logger.info("Scheduler working...")
+            start = datetime.now()
             with get_sql_session() as session:
                 # schedule tasks
-                self.check_schedule_time(session)
+                self.schedule_and_update_jobs(session)
                 # update running/pending tasks state
                 self.check_tasks_state(session)
                 # check 
             self.send_heartbeat()
             logger.info("Waiting for next poll...")
-            sleep(poll_interval)
+            sleep_for = max(poll_interval - 
+                    (datetime.now() - start).total_seconds(),
+                    0)
+            sleep(sleep_for)
 
     def send_heartbeat(self):
         # TODO:
@@ -329,17 +347,40 @@ class ScheduleManager(object):
 
 
     @provide_session
-    def check_schedule_time(self, session=None):
+    def schedule_and_update_jobs(self, session=None):
         """ check all active jobs and schedule tasks when it's time """
+        now = datetime.now()
+        blocked_jobs = session.query(Job).filter(
+                        Job.active==False).filter(
+                        Job.block_until != None).with_for_update().all()
+        if blocked_jobs:
+            for job in blocked_jobs:
+                if now > blocked_jobs.block_until:
+                    job.activate = True 
+                    logger.info("Job {} is unblocked".format(job.name))
+
         active_jobs = session.query(Job).filter(
-            Job.active==True).with_for_update().all()
+            Job.active==True).with_for_update().all()  
         logger.info("Find {} active jobs, try to schedule them".format(
-                    len(active_jobs)))
+                    len(active_jobs)))      
         if active_jobs:
             for job in active_jobs:
+                # check if the job should be deactivate 
+                if job.end_dt and now > job.end_dt:
+                    job.active = False
+                    continue
+                reset_time = datetime.combine(datetime.today(),
+                        job.reset_status_at.time())
+                # check if the job state should be reset
+                if (now >= reset_time and job.last_task_result and 
+                        job.last_execution_ts < reset_time):
+                    job.set_status(session, 'unknown')
+
+                # schedule tasks for each active job
                 task_id = job.schedule_task(session)
                 if task_id is not None:
                     logger.info("schedule task {} for job {}".format(task_id, job.name))
+        session.commit()
 
     @provide_session
     def check_tasks_state(self, session=None):
@@ -378,10 +419,14 @@ class ScheduleManager(object):
         # CAVEAT
         # This is only for dashboard
         # if sysout starts with 1, data check passed
+        job.last_execution_ts = task.execution_date
         job.last_task_result = task.result
         if (not isinstance(job.last_task_result, str) or 
                 not job.last_task_result.startswith("1")):
             self._send_alert(job, session)
+            job.set_status(session, 'failure')
+        else:
+            job.set_status(session, 'success')
         session.commit()
 
     def _send_alert(self, job, session):
@@ -638,14 +683,6 @@ class RequestHandler:
         job = session.query(Job).filter(Job.name==job_name
                 ).with_for_update().first()
         if job:
-            # # SUSIE DEBUG
-            # print("force run!")
-            # from dashboard.db import open_sql_server_session
-            # from dashboard.config import config
-            # with open_sql_server_session(config, 'REFERENCE') as cursor:
-            #     res = cursor.execute(job.command).fetchall()
-            #     print(res)
-            # return res
             task_id = job.schedule_task(session, force_run=True)
             return task_id 
         return None

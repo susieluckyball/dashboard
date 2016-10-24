@@ -26,31 +26,40 @@ cron_presets = {
     # '@yearly': '0 0 1 1 *',
 }
 
-validate_crontab_time_format_regex = re.compile(\
-        "{0}\s+{1}\s+{2}\s+{3}\s+{4}".format(\
-            "(?P<minute>\*|[0-5]?\d)",\
-            "(?P<hour>\*|[01]?\d|2[0-3])",\
-            "(?P<day>\*|0?[1-9]|[12]\d|3[01])",\
-            "(?P<month>\*|0?[1-9]|1[012])",\
-            "(?P<day_of_week>\*|[0-6](\-[0-6])?)"\
-        ) # end of str.format()
-    ) # end of re.compile()
+# def valid_crontab_string(string):
+#     validate_crontab_time_format_regex = re.compile(\
+#             "{0}\s+{1}\s+{2}\s+{3}\s+{4}".format(\
+#                 "(?P<minute>\*|[0-5]?\d)",\
+#                 "(?P<hour>\*|[01]?\d|2[0-3])",\
+#                 "(?P<day>\*|0?[1-9]|[12]\d|3[01])",\
+#                 "(?P<month>\*|0?[1-9]|1[012])",\
+#                 "(?P<day_of_week>\*|[0-6](\-[0-6])?)"\
+#             ) # end of str.format()
+#         ) # end of re.compile()    
+#     return (validate_crontab_time_format_regex.match(string) is not None)
 
-def get_cron_schedule_interval(schedule_interval, start_dt, weekday_to_run=None):
+
+def valid_crontab_string(string):
+    try:
+        test = croniter.croniter(string)
+        return True 
+    except Exception:
+        return False
+
+def get_cron_schedule_interval(schedule_interval, start_dt, weekday_to_run):
     if schedule_interval in cron_presets:
         return cron_presets[schedule_interval].format(m=start_dt.minute,
         		h=start_dt.hour, weekday=start_dt.weekday()+1)
     
-    interval_hr = int(schedule_interval)
-    assert interval_hr < 24 and interval_hr > 0
     assert isinstance(weekday_to_run, list)
-    assert all([isinstance(i, str) for i in weekday_to_run])
-    cron_str = '* */{hr} * * {weekday}'.format(
-    		hr=interval_hr,weekday=",".join(weekday_to_run))
+    weekday_to_run = [str(i) for i in weekday_to_run]
+    cron_str = '{m} {h} * * {weekday}'.format(
+    		m=start_dt.minute,h=start_dt.hour,
+            weekday=",".join(weekday_to_run))
     return cron_str
 
-def get_next_run_ts(crontab):
-	cron = croniter.croniter(crontab)
+def get_next_run_ts(crontab, current):
+	cron = croniter.croniter(crontab, current)
 	return cron.get_next(datetime)
 
 
