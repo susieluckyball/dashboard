@@ -48,9 +48,9 @@
 			 	{% if job.active %}
 		 		<td>Active</td> 
 		 		{% else %}
-		 		<td>Inactive</td>
+		 		<td>Blocked by<br> {{job.block_by}}</td>
 		 		{% endif %}
-				<td><a href="{{ url_for('main.info_job', job_name=job.name, action='info') }}">{{ job.name }}</a></td>
+				<td><a href="{{ url_for('main.info_job', job_name=job.name) }}">{{ job.name }}</a></td>
 				<td>{{ job.timezone }}</td>
 				<td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
 				<td>{{ job.status_map[job.status] }}</td>
@@ -65,14 +65,13 @@
 				<td class="dropdown">
 			        <a href="#" class="dropdown-toggle" data-toggle="dropdown"><span class="glyphicon glyphicon-cog"></span></a>
 			        <ul class="dropdown-menu">
-		          		<li><a href="{{ url_for('main.info_job', job_name=job.name, action='run') }}">Schedule Now</a></li>
+		          		<li><a href="{{ url_for('main.job_operation', job_name=job.name, operation='run', stay=True) }}">Schedule Now</a></li>
 						<li><a href="{{ url_for('main.edit_job', job_name=job.name ) }}">Edit</a></li>
 						{% if job.active %}
-							<li><a href="{{ url_for('main.info_job', job_name=job.name, action='deactivate') }}">Deactivate</a></li>
+							<li><a href="{{ url_for('main.job_operation', job_name=job.name, operation='deactivate', stay=True) }}">Deactivate</a></li>
 						{% else %}
-							<li><a href="{{ url_for('main.info_job', job_name=job.name, action='activate') }}">Activate</a></li>
+							<li><a href="{{ url_for('main.job_operation', job_name=job.name, operation='activate', stay=True) }}">Activate</a></li>
 						{% endif %}
-						<li><a href="{{ url_for('main.info_job', job_name=job.name, action='delete') }}">Delete</a></li>
 			       	</ul>
 			    </td> 
 			</tr>

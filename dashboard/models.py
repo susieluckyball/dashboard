@@ -18,7 +18,7 @@ from dashboard.utils.date import (convert_to_utc,
         get_cron_schedule_interval, get_next_run_ts)
 from dashboard.utils.db import (engine, get_redis_conn, 
         provide_session, get_sql_session)
-from dashboard.utils.emails import send_email
+from dashboard.utils.emails import send_email, valid_email
 
 
 Base = declarative_base()
@@ -81,7 +81,7 @@ class Job(Base):
     start_dt = Column(DateTime)   # local dt
     end_dt = Column(DateTime, nullable=True)   # local dt
     active = Column(Boolean)
-    block_until = Column(DateTime, nullable=True)
+    block_till = Column(DateTime, nullable=True)
     block_by = Column(String(50), nullable=True)
     block_msg = Column(String(200), nullable=True)
     schedule_interval = Column(String(20))
@@ -109,7 +109,8 @@ class Job(Base):
                 schedule_interval_crontab, 
                 reset_status_at,
                 operator, database,
-                command, **kwargs):
+                command, active=True,
+                block_till=None, block_by=None, **kwargs):
         self.name = name
         self.timezone = timezone
         self.update_time = datetime.utcnow()
@@ -126,9 +127,9 @@ class Job(Base):
         else:
             self.end_dt = pd.to_datetime(self.end_dt)
 
-        self.active = True
-        self.block_util = None 
-        self.block_by = None
+        self.active = active
+        self.block_till = block_till
+        self.block_by = block_by
 
         # figure out the schedule interval crontab...
         if len(schedule_interval_crontab):
@@ -352,10 +353,10 @@ class ScheduleManager(object):
         now = datetime.now()
         blocked_jobs = session.query(Job).filter(
                         Job.active==False).filter(
-                        Job.block_until != None).with_for_update().all()
+                        Job.block_till != None).with_for_update().all()
         if blocked_jobs:
             for job in blocked_jobs:
-                if now > blocked_jobs.block_until:
+                if now > job.block_till:
                     job.activate = True 
                     logger.info("Job {} is unblocked".format(job.name))
 
@@ -482,6 +483,7 @@ class RequestHandler:
         user = User(email=email, password=password)
         session.add(user)
         session.commit()
+        return 
 
     @classmethod
     @provide_session
@@ -548,6 +550,18 @@ class RequestHandler:
         return tasks
 
     @classmethod
+    @provide_session    
+    def clear_tasks_history(cls, job_name, session=None):
+        tasks = session.query(TaskInstance).filter(
+                TaskInstance.job_name==job_name).with_for_update(
+                ).all()
+        for t in tasks:
+            session.delete(t)
+        session.commit()
+        return
+
+
+    @classmethod
     @provide_session
     def add_job(cls, job_args, tags, subscribers, session=None):
         """ add a new job """
@@ -586,7 +600,12 @@ class RequestHandler:
                 Tag.job_name==job_args['name']).with_for_update().all()
         ex_subs = session.query(JobAlert).filter(
                 JobAlert.job_name==job_args['name']).with_for_update().all()
-    
+        #
+        # This (I think) is poorly designed...
+        # 
+        job_args['active'] = job.active
+        job_args['block_till'] = job.block_till
+        job_args['block_by'] = job.block_by
         tmp = Job(**job_args)
         # update jobs attributes
         for k, v in vars(tmp).items():
@@ -627,6 +646,30 @@ class RequestHandler:
 
     @classmethod
     @provide_session
+    def block_job_till(cls, job_name, block_till, 
+                    block_msg, email, errors, session=None):
+        job = session.query(Job).filter(
+                Job.name==job_name).with_for_update().first()
+        if not job:
+            errors.append("no job with name {}".format(job_name))
+            return False 
+        try:
+            job.block_till = pd.to_datetime(block_till)
+        except Exception as e:
+            errors.append(str(e))
+            return False
+        if not valid_email(email):
+            error.append("email {} is not valid".format(email))
+            return False 
+        job.active = False 
+        job.block_msg = block_msg 
+        job.block_by = email
+        session.commit()        
+        return True
+
+
+    @classmethod
+    @provide_session
     def change_job_status(cls, job_name, session=None, deactivate=True):
         """ set the job instance inactive """
         job = session.query(Job).filter(
@@ -653,7 +696,7 @@ class RequestHandler:
                     logger.debug(msg)
         else:
             msg = "Job with name {} does not exist".format(job_name)
-            logger.warning()
+            logger.warning(msg)
         return msg
 
     @classmethod
@@ -672,9 +715,19 @@ class RequestHandler:
                     ).with_for_update().first()
         tags = session.query(Tag).filter(Tag.job_name==job_name
                     ).with_for_update().all()
+        tasks = session.query(TaskInstance).filter(TaskInstance.job_name
+                    ==job_name).with_for_update().all()
+        job_alerts = session.query(JobAlert).filter(JobAlert.job_name
+                    ==job_name).with_for_update().all()
+        # NOTE:
+        # not exactly clear whether to delete all tag related alerts
         session.delete(job)
         for t in tags:
             session.delete(t)
+        for t in tasks:
+            session.delete(t)
+        for j in job_alerts:
+            session.delete(j)
         session.commit()
 
     @classmethod

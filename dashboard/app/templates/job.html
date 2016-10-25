@@ -10,27 +10,96 @@
   </div>
 
   <div>
+    <!-- Actions defined here -->
     <h3>
+      <!-- edit button -->
       <span><a href="{{ url_for('main.edit_job', job_name=job.name ) }}" class="button btn btn-info" data-toggle="tooltip" title="info/edit">
       <span  class="glyphicon glyphicon-pencil"></span> Edit </a>
       </span>
 
-      <span><a href="{{ url_for('main.info_job', job_name=job.name, action='run' ) }}" class="button btn btn-success" data-toggle="tooltip" title="run now">
-        <span class="glyphicon glyphicon-play"></span> Run </a>
-      </span>
+      <!-- run button -->
+      <button type="button" id="btnRun" class="btn btn-success" jobName="{{job.name}}"><span class="glyphicon glyphicon-play"></span> Run </button>
 
-      <span><a href="{{ url_for('main.info_job', job_name=job.name, action='delete' ) }}" class="button btn btn-danger" data-toggle="tooltip" title="delete job">
-        <span class="glyphicon glyphicon-trash"></span> Delete </a>
-      </span>
+      <!-- clear history button with warning-->
+      <a data-toggle="modal" data-target="#clearHistoryModal" class="button btn btn-default" title="clear"><span class="glyphicon glyphicon-floppy-remove"></span> Clear History </a>
+      
+      <div class="modal fade" id="clearHistoryModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+              <div class="modal-content">
+                  <div class="modal-body">
+                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
+                      </button>
+                      <h4 class="modal-title" id="deleteModalLabel">Do you want to delete task history for job {{ job.name }}?</h4>
+                  </div>
 
-<!--       <span><a href="{{ url_for('main.info_job', job_name=job.name, action='deactivate' ) }}" class="button btn btn-warning" data-toggle="tooltip" title="deactivate" color='grey'>
-        <span class="glyphicon glyphicon-eye-close"></span> Deactivate </a>
-      </span> -->
+                  <div class="modal-footer">
+                      <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                      <button type="button" id="btnClear" class="btn btn-danger" jobName="{{job.name}}"> Clear </span></a>
+                  </div>
+              </div>
+          </div>
+      </div>
 
-      <span><a href="{{ url_for('main.info_job', job_name=job.name, action='block' ) }}" class="button btn btn-warning" data-toggle="tooltip" title="block">
-        <span class="glyphicon glyphicon-eye-close"></span> Block </a>
-      </span>
+      <!-- delete button with confirm pop-up -->
+      <a data-toggle="modal" data-target="#deleteModal" class="button btn btn-danger" title="delete"><span class="glyphicon glyphicon-trash"></span> Delete </a>
+      
+      <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+              <div class="modal-content">
+                  <div class="modal-body">
+                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
+                      </button>
+                      <h4 class="modal-title" id="deleteModalLabel">Warning: you cannot undo delete.</h4>
+                  </div>
+
+                  <div class="modal-footer">
+                      <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                      <button type="button" id="btnDelete" class="btn btn-danger" jobName="{{job.name}}"> Delete </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {% if job.active %}
+      <!-- block button -->
+      <a data-toggle="modal" data-target="#blockModal" class="button btn btn-warning" title="block"><span class="glyphicon glyphicon-eye-close"></span> Block</a>
+      <!-- block modal -->
+      <div class="modal fade" id="blockModal" tabindex="-1" role="dialog" aria-labelledby="blockModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+              <div class="modal-content">
+                  <div class="modal-header">
+                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
+                      </button>
+                      <h2 class="modal-title" id="blockModalLabel">Block Job</h2>
+                  </div>
+                  <div class="modal-body">
+                      <form role="form">
+                          <div class="form-group">
+                              <label for="blockTill" class="control-label">Block Till:</label>
+                              <input type="text" class="form-control" id="blockTill" placeholder="yyyy-mm-dd HH:MM or HH:MM for today">
+                          </div>
+                          <div class="form-group">
+                              <label for="message-text" class="control-label">Message:</label>
+                              <textarea class="form-control" id="blockMessage"></textarea>
+                          </div>
+                      </form>
+                  </div>
+                  <div class="modal-footer">
+                      <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                      <button type="button" id="btnBlock" class="btn btn-primary" jobName="{{job.name}}">Block</button>
+                  </div>
+              </div>
+          </div>
+      </div>
+      <!-- end block modal -->
+      {% else %}
+      <!-- unblock button -->
+      <button data-toggle='tooltip' title='activate job' type="button" id="btnUnblock" class="btn btn-primary" jobName="{{job.name}}"><span class="glyphicon glyphicon-eye-open"></span> Unblock </button>
+
+      {% endif %}
+
     </h3>
+    <!-- End define all action buttons under the job title -->
   </div>
 
   <div class="row content">
@@ -119,6 +188,21 @@
           </td> 
         </tr>
 
+        {% if not job.active %}
+        <tr class="warning">
+          <td>Blocked Till</td>
+          <td>{{job.block_till}}</td> 
+        </tr>
+        <tr class="warning">
+          <td>Message</td>
+          <td>{{job.block_msg}}</td> 
+        </tr>
+        <tr class="warning">
+          <td>Blocked By</td>
+          <td>{{job.block_by}}</td> 
+        </tr>
+        {% endif %}
+
       </tbody>
       </table>
     
@@ -158,5 +242,81 @@ $(document).ready(function() {
     
     $('[data-toggle="tooltip"]').tooltip(); 
 } );
+
+
+$('#btnBlock').click(function() {
+    var block_job_url = {{url_for('main.block_job')|tojson|safe}};
+    $.ajax({
+        url: block_job_url,
+        data: {
+            block_till: $('#blockTill').val(),
+            message: $('#blockMessage').val(),
+            job_name: $('#btnBlock').attr('jobName')
+        },
+        type: 'POST',
+        success: function(xhr, status, error) {
+            var r = JSON.parse(xhr);
+            if (r.status == 'ERROR') {
+              alert('Block job not successful: ' + r.msg);
+            } else {
+              $('#blockModal').modal('hide');
+              location.reload();
+            }
+            // Re populate the grid
+        },
+        error: function(res) {
+            alert("failure");
+            alert(res['msg']);
+        }
+    })
+});
+
+
+function job_operation(jobName, op, stayPage){
+    var op_job_url = {{url_for('main.job_operation')|tojson|safe}};
+    $.ajax({
+        url: op_job_url,
+        data: {
+            job_name: jobName,
+            operation: op
+        },
+        type: 'GET',
+        success: function(xhr, status, error) {
+            var r = JSON.parse(xhr);
+            if (r.status == 'ERROR') {
+              alert('Job operation ' + op + ' not successful: ' + r.msg);
+            } else if (stayPage) {
+              location.reload();
+            } else {
+              location.href = '/'
+            }
+        },
+        error: function(res) {
+            alert("failure");
+            alert(res['msg']);
+        }
+    })
+}
+
+$('#btnRun').click(function() {
+   var job_name = $('#btnRun').attr('jobName');
+    job_operation(job_name, "run", true);
+});
+
+$('#btnClear').click(function() {
+   var job_name = $('#btnClear').attr('jobName');
+    job_operation(job_name, "clear", true);
+});
+
+$('#btnDelete').click(function() {
+   var job_name = $('#btnDelete').attr('jobName');
+    job_operation(job_name, "delete", false);
+});
+
+$('#btnUnblock').click(function() {
+   var job_name = $('#btnUnblock').attr('jobName');
+    job_operation(job_name, "activate", true);
+});
+
 </script>
 {% endblock %}

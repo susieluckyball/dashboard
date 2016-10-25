@@ -1,4 +1,5 @@
 from email.mime.text import MIMEText
+import re
 import smtplib
 
 from dashboard.configuration import conf 
@@ -26,3 +27,9 @@ def send_email(subject, to, body):
         s.sendmail(SMTP_FROM, recipients, msg.as_string())
     finally:
         s.quit()
+
+
+EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
+
+def valid_email(email_str):
+    return (EMAIL_REGEX.match(email_str) is not None)

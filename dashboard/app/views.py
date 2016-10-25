@@ -2,9 +2,12 @@ from flask import Flask, request, render_template, redirect, flash, url_for, jso
 from flask.ext.wtf import Form 
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import partial
+import json
 from wtforms import (BooleanField, PasswordField, SelectField, 
                     StringField, SubmitField, TextAreaField, TextField)
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Required
+from wtforms.validators import (DataRequired, Email, EqualTo, 
+                    Length, Required, ValidationError)
+
 
 from app import main, auth, login_manager
 from models import RequestHandler
@@ -129,7 +132,19 @@ class RegistrationForm(Form):
         if RequestHandler.get_user(email=field.data):
             raise ValidationError('Email already registered.')
 
+class BlockJobForm(Form):
+    block_for = SelectField('Block for', coerce=str, 
+                choices=[('1 day', '1 day'),
+                        ('1 week', '1 week'),
+                        ('other', 'other')])
+    block_until = StringField('Block until datetime')
+    message = TextAreaField('Message', render_kw={"rows":3, "cols":60})
 
+
+def redirect_url():
+    return request.args.get('next') or \
+           request.referrer or \
+           url_for('index')
 
 @main.route('/', methods=['GET', 'POST'])
 @main.route('/index', methods=['GET', 'POST'])
@@ -140,7 +155,6 @@ def index():
     for job in all_active_jobs:
         job.initialize_shortcommand()
         job.initialize_short_result()
-        # job.get_local_run_time()
     return render_template('index.html', 
                 all_tags=all_tags,
                 all_active_jobs=all_active_jobs,
@@ -201,39 +215,97 @@ def edit_job(job_name):
     return render_template('add_job.html', form=form, modify=True)
 
 
-@main.route('/jobs/<job_name>/<action>', methods=['GET', 'POST'])
-def info_job(job_name, action='info'):
-    if action == 'info':
-        job, tags, tasks, alerts = RequestHandler.info_job(job_name)
-        job.initialize_shortcommand()
-        job.initialize_short_result()
-        return render_template('job.html', job=job, 
-                        tags=tags, tasks=tasks,
-                        alerts=alerts, 
-                        isinstance=isinstance,
-                        str=unicode)
-    elif action == 'run':
-        flash("Force job {} to run now".format(job_name))
-        celery_tid = RequestHandler.force_schedule_for_job(job_name)
-        return redirect(url_for('main.info_job', job_name=job_name, action='info'))
-    elif action == 'deactivate':
-        msg = RequestHandler.change_job_status(job_name, deactivate=True)
-        if msg is True:
-            flash("Deactivated job {}".format(job_name))
+
+
+@main.route('/block_job', methods=['POST'])
+@login_required
+def block_job():
+    block_till = request.form['block_till']
+    message = request.form['message']
+    job_name = request.form['job_name']
+    errors = []
+    print(current_user.email)
+    if RequestHandler.block_job_till(job_name, 
+            block_till, message, current_user.email, errors):
+        return json.dumps({'status':'OK'})
+    return json.dumps({'status':'ERROR', 'msg': "\n".join(errors)})
+
+@main.route('/operation_job', methods=['GET'])
+@login_required
+def job_operation():
+    job_name = request.args.get('job_name')
+    op = request.args.get('operation')
+    redir = request.args.get('stay')
+    if job_name:
+        if op == 'clear':
+            RequestHandler.clear_tasks_history(job_name)
+        elif op == 'delete':
+            RequestHandler.remove_job(job_name)
+        elif op == 'run':
+            RequestHandler.force_schedule_for_job(job_name)
+        elif op == 'deactivate':
+            msg = RequestHandler.change_job_status(job_name, deactivate=True)
+            if msg is True:
+                flash("Deactivated job {}".format(job_name))
+            else:
+                flash(msg)
+        elif op == 'activate':
+            msg = RequestHandler.change_job_status(job_name, deactivate=False)
+            if msg is True:
+                flash("Activated job {}".format(job_name))
+            else:
+                flash(msg)           
+        if redir:
+            return redirect(redirect_url())
         else:
-            flash(msg)
-    elif action == "activate":
-        msg = RequestHandler.change_job_status(job_name, deactivate=False)
-        if msg is True:
-            flash("Activated job {}".format(job_name))
-        else:
-            flash(msg)
-    elif action == 'edit':
-        return redirect(url_for('main.edit_job', job_name=job_name))
-    elif action == 'delete':
-        flash("Job {} is deleted".format(job_name))
-        RequestHandler.remove_job(job_name)
-    return redirect(url_for('main.index'))
+            return json.dumps({'status':'OK'})
+    return json.dumps({'status':'ERROR', 'msg':'Job name not given'})
+
+
+@main.route('/jobs/<job_name>', methods=['GET', 'POST'])
+def info_job(job_name):
+    job, tags, tasks, alerts = RequestHandler.info_job(job_name)
+    job.initialize_shortcommand()
+    job.initialize_short_result()
+    return render_template('job.html', job=job, 
+                    tags=tags, tasks=tasks,
+                    alerts=alerts, 
+                    isinstance=isinstance,
+                    str=unicode)
+
+# @main.route('/jobs/<job_name>/<action>', methods=['GET', 'POST'])
+# def info_job(job_name, action='info'):
+#     if action == 'info':
+#         job, tags, tasks, alerts = RequestHandler.info_job(job_name)
+#         job.initialize_shortcommand()
+#         job.initialize_short_result()
+#         return render_template('job.html', job=job, 
+#                         tags=tags, tasks=tasks,
+#                         alerts=alerts, 
+#                         isinstance=isinstance,
+#                         str=unicode)
+#     elif action == 'run':
+#         flash("Force job {} to run now".format(job_name))
+#         celery_tid = RequestHandler.force_schedule_for_job(job_name)
+#         return redirect(url_for('main.info_job', job_name=job_name, action='info'))
+#     elif action == 'deactivate':
+#         msg = RequestHandler.change_job_status(job_name, deactivate=True)
+#         if msg is True:
+#             flash("Deactivated job {}".format(job_name))
+#         else:
+#             flash(msg)
+#     elif action == "activate":
+#         msg = RequestHandler.change_job_status(job_name, deactivate=False)
+#         if msg is True:
+#             flash("Activated job {}".format(job_name))
+#         else:
+#             flash(msg)
+#     elif action == 'edit':
+#         return redirect(url_for('main.edit_job', job_name=job_name))
+#     elif action == 'delete':
+#         flash("Job {} is deleted".format(job_name))
+#         RequestHandler.remove_job(job_name)
+#     return redirect(url_for('main.index'))
 
 
 @main.route('/tags/<tag_name>', methods=['GET', 'POST'])
@@ -251,7 +323,6 @@ def info_tag(tag_name):
             action='add', name=tag_name, email=email))
 
 
-
 @main.route('/alerts/<inst_type>/<name>/<action>', methods=['GET'])
 @login_required
 def edit_subscription_for_current_user(inst_type, name, action='subscribe'):
@@ -263,8 +334,7 @@ def edit_subscription_for_current_user(inst_type, name, action='subscribe'):
         RequestHandler.unsubscribe(inst_type, name, email)
         flash("Unsubscribe {} to {} '{}'".format(email, inst_type, name))
     if inst_type == 'job':
-        return redirect(url_for('main.info_job', 
-                    job_name=name, action='info'))
+        return redirect(url_for('main.info_job', job_name=name))
     else:
         return redirect(url_for('main.info_tag', tag_name=name))
 
@@ -280,9 +350,19 @@ def edit_tag_subscription(action, name, email):
     return redirect(url_for('main.info_tag', tag_name=name))
 
 
+
+################
+# login features 
+################
+
 @login_manager.user_loader
 def load_user(id):
     return RequestHandler.get_user_by_id(id)
+
+
+@login_manager.unauthorized_handler
+def unauthorized_callback():
+    return json.dumps({'status':'ERROR','msg':'login required!'})
 
 
 @auth.route('/login', methods=['GET', 'POST'])
@@ -309,7 +389,7 @@ def register():
     if form.validate_on_submit():
         RequestHandler.register(email=form.email.data, 
                             password=form.password.data)
-        flash('You can now login.')
+        flash('Registered, you are good to log in!')
         return redirect(url_for('auth.login'))
     return render_template('auth/register.html', form=form)
 
@@ -320,3 +400,4 @@ def logout():
     logout_user()
     flash('You have been logged out.')
     return redirect(url_for('main.index'))
+
