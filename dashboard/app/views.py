@@ -1,9 +1,11 @@
-from flask import Flask, request, render_template, redirect, flash, url_for, jsonify, session
+from flask import (Flask, Markup, request, render_template, 
+                    redirect, flash, url_for, jsonify, session)
 from flask.ext.wtf import Form 
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import partial
 import json
-from wtforms import (BooleanField, PasswordField, SelectField, 
+from pandas import to_datetime
+from wtforms import (BooleanField, DateTimeField, PasswordField, SelectField, 
                     StringField, SubmitField, TextAreaField, TextField)
 from wtforms.validators import (DataRequired, Email, EqualTo, 
                     Length, Required, ValidationError)
@@ -12,6 +14,7 @@ from wtforms.validators import (DataRequired, Email, EqualTo,
 from app import main, auth, login_manager
 from models import RequestHandler
 from dashboard.utils.date import (cron_presets, valid_crontab_string)
+from dashboard.utils.emails import valid_email
 
 
 
@@ -42,7 +45,7 @@ class JobForm(Form):
             choices=[('bash', 'Bash'),
                      ('sql', 'SQL'),
                     ('python', 'Python')],
-            validators=[DataRequired()], id='operator')
+            validators=[DataRequired()], id="operator")
     database = SelectField('Database', coerce=str, 
             choices=[('ENTERPRISE', 'Enterprise'),
                     ('REFERENCE', 'Reference'),
@@ -94,7 +97,8 @@ class JobForm(Form):
         # organize optional fields
         if job_args['schedule_interval_crontab'] != '':
             if not valid_crontab_string(job_args['schedule_interval_crontab']):
-                flash('Schedule interval crontab has to be a valid crontab string')
+                flash(Markup(('Schedule interval crontab has to be a valid crontab string, '
+                    'help with crontab <a href="http://crontab.guru/" class="alert-link">here</a>.')))
                 return False
 
         elif job_args['schedule_interval'] == 'other':
@@ -109,8 +113,20 @@ class JobForm(Form):
         
         # validate
         for sub in subscriptions:
-            if '@' not in sub:
-                flash('Subscriptions must be email addresses.')
+            if not valid_email(sub):
+                flash('Subscriptions must be valid email addresses.')
+                return False
+        if len(request.form['start_dt']):
+            try:
+                to_datetime(request.form['start_dt'])
+            except:
+                flash("Not valid start datetime.")
+                return False
+        if len(request.form['end_dt']):
+            try:
+                to_datetime(request.form['end_dt'])
+            except:
+                flash("Not valid end datetime")
                 return False
         return True 
 
@@ -131,14 +147,6 @@ class RegistrationForm(Form):
     def validate_email(self, field):
         if RequestHandler.get_user(email=field.data):
             raise ValidationError('Email already registered.')
-
-class BlockJobForm(Form):
-    block_for = SelectField('Block for', coerce=str, 
-                choices=[('1 day', '1 day'),
-                        ('1 week', '1 week'),
-                        ('other', 'other')])
-    block_until = StringField('Block until datetime')
-    message = TextAreaField('Message', render_kw={"rows":3, "cols":60})
 
 
 def redirect_url():
@@ -162,6 +170,7 @@ def index():
 
 
 @main.route('/jobs/new', methods=['GET', 'POST'])
+@login_required
 def add_job():
     form = JobForm()
     if request.method == 'POST':
@@ -186,6 +195,7 @@ def add_job():
 
 
 @main.route('/jobs/edit/<job_name>', methods=['GET', 'POST'])
+@login_required
 def edit_job(job_name):
     current_job, tags, _, _ = RequestHandler.info_job(job_name)
 
@@ -215,8 +225,6 @@ def edit_job(job_name):
     return render_template('add_job.html', form=form, modify=True)
 
 
-
-
 @main.route('/block_job', methods=['POST'])
 @login_required
 def block_job():
@@ -224,11 +232,11 @@ def block_job():
     message = request.form['message']
     job_name = request.form['job_name']
     errors = []
-    print(current_user.email)
     if RequestHandler.block_job_till(job_name, 
             block_till, message, current_user.email, errors):
-        return json.dumps({'status':'OK'})
-    return json.dumps({'status':'ERROR', 'msg': "\n".join(errors)})
+        return jsonify(success=True)
+    return jsonify(success=False, data={}, message="\n".join(errors)), 401
+
 
 @main.route('/operation_job', methods=['GET'])
 @login_required
@@ -258,8 +266,8 @@ def job_operation():
         if redir:
             return redirect(redirect_url())
         else:
-            return json.dumps({'status':'OK'})
-    return json.dumps({'status':'ERROR', 'msg':'Job name not given'})
+            return jsonify(success=True)
+    return jsonify(success=False, message="Job name not given"), 401
 
 
 @main.route('/jobs/<job_name>', methods=['GET', 'POST'])
@@ -272,41 +280,6 @@ def info_job(job_name):
                     alerts=alerts, 
                     isinstance=isinstance,
                     str=unicode)
-
-# @main.route('/jobs/<job_name>/<action>', methods=['GET', 'POST'])
-# def info_job(job_name, action='info'):
-#     if action == 'info':
-#         job, tags, tasks, alerts = RequestHandler.info_job(job_name)
-#         job.initialize_shortcommand()
-#         job.initialize_short_result()
-#         return render_template('job.html', job=job, 
-#                         tags=tags, tasks=tasks,
-#                         alerts=alerts, 
-#                         isinstance=isinstance,
-#                         str=unicode)
-#     elif action == 'run':
-#         flash("Force job {} to run now".format(job_name))
-#         celery_tid = RequestHandler.force_schedule_for_job(job_name)
-#         return redirect(url_for('main.info_job', job_name=job_name, action='info'))
-#     elif action == 'deactivate':
-#         msg = RequestHandler.change_job_status(job_name, deactivate=True)
-#         if msg is True:
-#             flash("Deactivated job {}".format(job_name))
-#         else:
-#             flash(msg)
-#     elif action == "activate":
-#         msg = RequestHandler.change_job_status(job_name, deactivate=False)
-#         if msg is True:
-#             flash("Activated job {}".format(job_name))
-#         else:
-#             flash(msg)
-#     elif action == 'edit':
-#         return redirect(url_for('main.edit_job', job_name=job_name))
-#     elif action == 'delete':
-#         flash("Job {} is deleted".format(job_name))
-#         RequestHandler.remove_job(job_name)
-#     return redirect(url_for('main.index'))
-
 
 @main.route('/tags/<tag_name>', methods=['GET', 'POST'])
 def info_tag(tag_name):
@@ -326,6 +299,11 @@ def info_tag(tag_name):
 @main.route('/alerts/<inst_type>/<name>/<action>', methods=['GET'])
 @login_required
 def edit_subscription_for_current_user(inst_type, name, action='subscribe'):
+    """
+    inst_type(str): job or tag 
+    name(str): job name or tag name 
+    action(str): subscribe or unsubscribe
+    """
     email = current_user.email 
     if action == 'subscribe':
         RequestHandler.subscribe(inst_type, name, email)
@@ -360,10 +338,19 @@ def load_user(id):
     return RequestHandler.get_user_by_id(id)
 
 
+# @login_manager.unauthorized_handler
+# def unauthorized_callback():
+#     return json.dumps({'status':'ERROR','msg':'login required!'})
+
 @login_manager.unauthorized_handler
 def unauthorized_callback():
-    return json.dumps({'status':'ERROR','msg':'login required!'})
-
+    if request.is_xhr:
+        return jsonify(success=False,
+                       data={'login_required': True},
+                       message='Login required!'), 401
+    else:
+        flash("Login required for editing and executing jobs!")
+        return redirect(url_for('auth.login'))
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
@@ -389,8 +376,10 @@ def register():
     if form.validate_on_submit():
         RequestHandler.register(email=form.email.data, 
                             password=form.password.data)
-        flash('Registered, you are good to log in!')
-        return redirect(url_for('auth.login'))
+        flash('Registered, you logged in!')
+        user = RequestHandler.get_user(form.email.data)
+        login_user(user, False)
+        return redirect(url_for('main.index'))
     return render_template('auth/register.html', form=form)
 
 

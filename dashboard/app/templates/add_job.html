@@ -20,6 +20,7 @@
         <form id='editjob' action="" method="post" name='job'>
             {{ form.hidden_tag() }}
             {{ wtf.form_errors(form, hiddens="only") }}
+
             {{ wtf.form_field(form.name) }}
             {{ wtf.form_field(form.timezone) }}
             {{ wtf.form_field(form.start_dt) }}
@@ -67,11 +68,21 @@ function hide_weekday_to_run(){
     return schedule_interval != 'other';
 }
 
+function hide_db(){
+    var operator = document.getElementById('operator').value;
+    return operator != 'sql';
+}
+
 $(document).ready(function(){
     if (hide_weekday_to_run()) {
         $('#weekday_to_run').hide();
     } else {
         $('#weekday_to_run').show();
+    }
+    if (hide_db()) {
+        $('#db').hide();
+    } else {
+        $('#db').show();
     }
 });
 
@@ -85,7 +96,6 @@ $('#schedule_interval').change(function(){
 
 
 $(function() {
-    $('#db').hide(); 
     $('#operator').change(function(){
         if($('#operator').val() == 'sql') {
             $('#db').show(); 

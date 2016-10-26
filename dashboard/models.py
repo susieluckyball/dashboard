@@ -6,7 +6,7 @@ import pandas as pd
 from time import sleep
 
 from sqlalchemy import (
-        Column, Integer, String, DateTime, Text, Boolean, Float)
+        Column, Integer, String, DateTime, Text, Boolean, Float, Unicode)
 from sqlalchemy import func, or_, and_
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import reconstructor, relationship, synonym
@@ -405,7 +405,12 @@ class ScheduleManager(object):
                 if isinstance(celery_task.result, Exception):
                     task.result = str(celery_task.result)
                 else:
-                    task.result = celery_task.result
+                    if celery_task.result == '1':
+                        task.result = '1, Constraint {} succeeded with no exception'.format(
+                                    task.job_name)
+                    else:
+                        task.result = celery_task.result
+
                 self._update_job_last_state(task, session)
 
         session.commit()
@@ -425,9 +430,10 @@ class ScheduleManager(object):
         if (not isinstance(job.last_task_result, str) or 
                 not job.last_task_result.startswith("1")):
             self._send_alert(job, session)
-            job.set_status(session, 'failure')
+            job.set_status(session, 'fail')
         else:
             job.set_status(session, 'success')
+
         session.commit()
 
     def _send_alert(self, job, session):
@@ -443,7 +449,7 @@ class ScheduleManager(object):
             subject = "Dashboard - Job Failure Alert"
             body = "Job {} (command {}) status: \nfailed with sysout {}".format(
                     job.name, job.command, job.last_task_result)
-            send_email(subject=subject, to_=recipients, body=body)
+            send_email(subject=subject, to=recipients, body=body)
 
 
 class RequestHandler:
@@ -557,6 +563,12 @@ class RequestHandler:
                 ).all()
         for t in tasks:
             session.delete(t)
+        job = session.query(Job).filter(Job.name==job_name
+                ).with_for_update().first()
+        if job:
+            job.last_execution_ts = None 
+            job.last_task_result = None
+            job.set_status(session, 'unknown')
         session.commit()
         return
 
@@ -607,11 +619,14 @@ class RequestHandler:
         job_args['block_till'] = job.block_till
         job_args['block_by'] = job.block_by
         tmp = Job(**job_args)
+        next_run_local_ts = get_next_run_ts(tmp.schedule_interval, 
+                        job.last_execution_ts)
         # update jobs attributes
         for k, v in vars(tmp).items():
             if k.startswith("_"):
                 continue 
             setattr(job, k, v)
+        job.next_run_local_ts = next_run_local_ts
         del tmp
 
         # remove the deleted tags from db, 
@@ -664,6 +679,10 @@ class RequestHandler:
         job.active = False 
         job.block_msg = block_msg 
         job.block_by = email
+        # I might still miss something here...
+        job.next_run_local_ts = get_next_run_ts(
+                    job.schedule_interval,
+                    job.block_till)
         session.commit()        
         return True
 
@@ -680,6 +699,7 @@ class RequestHandler:
                 if job.active:
                     logger.debug("deactivate job: {}".format(str(job)))
                     job.active = False
+                    job.next_run_local_ts = None
                     session.commit()
                     return True
                 else:
@@ -689,6 +709,9 @@ class RequestHandler:
                 if not job.active:
                     logger.debug("activate job: {}".format(str(job)))
                     job.active = True
+                    job.next_run_local_ts = get_next_run_ts(
+                        job.schedule_interval,
+                        datetime.now())
                     session.commit()
                     return True 
                 else:

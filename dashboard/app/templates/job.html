@@ -138,6 +138,7 @@
   </div>
 
   <div class="col-sm-5">
+
       {% if current_user.is_authenticated() %}
         {% if current_user.is_subscribed_to(name=job.name, job=True) %}
         <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
@@ -147,12 +148,30 @@
       {% else %}
       <h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
       {% endif %}
+      
+
       <table class="table table-hover is-breakable">
       <tbody>
-        <tr>
+        {% if not job.active %}
+        <tr class="warning">
+          <td>Blocked Till</td>
+          <td>{{job.block_till}}</td> 
+        </tr>
+        <tr class="warning">
+          <td>Message</td>
+          <td>{{job.block_msg}}</td> 
+        </tr>
+        <tr class="warning">
+          <td>Blocked By</td>
+          <td>{{job.block_by}}</td> 
+        </tr>
+        {% else %}
+        <tr class="success">
           <td>Active</td>
           <td>{{ job.active }}</td>
         </tr>
+        {% endif %}
+
         <tr>
           <td>Timezone</td>
           <td>{{ job.timezone }}</td>
@@ -187,22 +206,6 @@
             {% endfor %}
           </td> 
         </tr>
-
-        {% if not job.active %}
-        <tr class="warning">
-          <td>Blocked Till</td>
-          <td>{{job.block_till}}</td> 
-        </tr>
-        <tr class="warning">
-          <td>Message</td>
-          <td>{{job.block_msg}}</td> 
-        </tr>
-        <tr class="warning">
-          <td>Blocked By</td>
-          <td>{{job.block_by}}</td> 
-        </tr>
-        {% endif %}
-
       </tbody>
       </table>
     
@@ -255,18 +258,13 @@ $('#btnBlock').click(function() {
         },
         type: 'POST',
         success: function(xhr, status, error) {
-            var r = JSON.parse(xhr);
-            if (r.status == 'ERROR') {
-              alert('Block job not successful: ' + r.msg);
-            } else {
-              $('#blockModal').modal('hide');
-              location.reload();
-            }
+            $('#blockModal').modal('hide');
+            location.reload();
             // Re populate the grid
         },
-        error: function(res) {
-            alert("failure");
-            alert(res['msg']);
+        error: function(xhr, status, error) {
+            var r = JSON.parse(xhr.responseText);
+            alert(r['message']);
         }
     })
 });
@@ -282,18 +280,15 @@ function job_operation(jobName, op, stayPage){
         },
         type: 'GET',
         success: function(xhr, status, error) {
-            var r = JSON.parse(xhr);
-            if (r.status == 'ERROR') {
-              alert('Job operation ' + op + ' not successful: ' + r.msg);
-            } else if (stayPage) {
+           if (stayPage) {
               location.reload();
             } else {
               location.href = '/'
             }
         },
-        error: function(res) {
-            alert("failure");
-            alert(res['msg']);
+        error: function(xhr, status, error) {
+            var r = JSON.parse(xhr.responseText);
+            alert('Job operation ' + op + ' not successful: ' + r['message']);
         }
     })
 }

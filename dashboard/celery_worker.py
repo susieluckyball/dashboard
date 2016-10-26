@@ -44,8 +44,10 @@ def execute_sql(sql, database):
             if len(res) == 1:
                 res = ", ".join([str(i) for i in res[0]])
                 return res
+            elif len(res) == 0:
+                return "1"
             else:
-                return "sql query output: {}".formt(res)
+                return "sql query output: {}".format(res)
     except Exception as e:
         e = "passed sql query {}\n".format(sql) + str(e)
         raise RuntimeError('Celery sql query failed\n{}'.format(e))

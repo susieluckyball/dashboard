@@ -31,6 +31,7 @@ Dashboard
     </ul>
     <ul class="nav navbar-nav navbar-right">
       {% if current_user.is_authenticated() %}
+      <!-- should add show/edit my subscriptions page -->
       <li><a href="#"><span class="glyphicon glyphicon-user"></span> {{ current_user.email }} </a></li>
       <li><a href="{{ url_for('auth.logout') }}"><span class="glyphicon glyphicon-log-in"></span> Sign Out </a></li>
       {% else %}

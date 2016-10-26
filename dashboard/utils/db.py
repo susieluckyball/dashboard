@@ -53,6 +53,7 @@ def configure_databases():
     global engine
     global session_factory    
     engine_args = {}
+    engine_args['encoding'] = 'iso-8859-1'
     web_db = conf.get('webserver', 'database')
     if 'sqlite' not in web_db:
         # Engine args not supported by sqlite
@@ -94,8 +95,8 @@ def open_sql_server_session(db, commit=False):
     """ This is data sql server session """
     driver = conf.get('database', 'DRIVER')
     server = conf.get('database', db)
-    conn_str = "Driver={{driver}};Server={server};Database={db};Trusted_Connection=Yes;".format(
-                driver=driver, server=server, db=db)
+    conn_str = "Driver={%s};Server=%s;Database=%s;Trusted_Connection=Yes;" %(driver, server, db)
+
     conn = pyodbc.connect(conn_str)
     cursor = conn.cursor()
     try:
