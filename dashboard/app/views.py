@@ -228,7 +228,9 @@ def edit_job(job_name):
 @main.route('/block_job', methods=['POST'])
 @login_required
 def block_job():
-    block_till = request.form['block_till']
+    block_till = request.form['block_select']
+    if block_till == 'other':
+        block_till = request.form['block_till']
     message = request.form['message']
     job_name = request.form['job_name']
     errors = []
@@ -252,7 +254,8 @@ def job_operation():
         elif op == 'run':
             RequestHandler.force_schedule_for_job(job_name)
         elif op == 'deactivate':
-            msg = RequestHandler.change_job_status(job_name, deactivate=True)
+            msg = RequestHandler.change_job_status(job_name, 
+                    deactivate=True, by=current_user.email)
             if msg is True:
                 flash("Deactivated job {}".format(job_name))
             else:

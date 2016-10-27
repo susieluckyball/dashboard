@@ -12,7 +12,7 @@
     <div class="col-sm-6">
         <div class="page-header">
             {% if modify %}
-                <h1>Edit Job {{form.name.description}}</h1></span>
+                <h2>Edit Job <a href="{{ url_for('main.info_job', job_name=form.name.data)}}" class="btn btn-info btn-sm">Cancel</a></h2>
             {% else %}
                 <h1>Add New Job</h1></span>
             {% endif %}

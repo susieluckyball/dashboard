@@ -38,13 +38,20 @@
 			</thead>
 			<tbody>
 			{% for job in all_active_jobs %}
-			{% if job.status_map[job.status] == 'unknown'%}
-			 <tr class='warning'>
-			{% elif job.status_map[job.status] == 'fail'%}
-			 <tr class='danger'>
-			 {% else %}
-			 <tr class='success'>
-			 {% endif %}
+			<!-- row color -->
+			{% if job.active %}
+				{% if job.status_map[job.status] == 'unknown'%}
+				 <tr class='warning'>
+				{% elif job.status_map[job.status] == 'fail'%}
+				 <tr class='danger'>
+				 {% else %}
+				 <tr class='success'>
+				 {% endif %}
+			{% else %}
+				<tr style="background-color: #D6EAF8">
+			{% endif %}
+
+			<!-- each field in the row -->
 			 	{% if job.active %}
 		 		<td>Active</td> 
 		 		{% else %}

@@ -669,7 +669,15 @@ class RequestHandler:
             errors.append("no job with name {}".format(job_name))
             return False 
         try:
-            job.block_till = pd.to_datetime(block_till)
+            if block_till == '1 day':
+                job.block_till = datetime.now() + timedelta(days=1)
+            elif block_till == '2 day':
+                job.block_till = datetime.now() + timedelta(days=2)
+            elif block_till == '1 week':
+                job.block_till = datetime.now() + timedelta(days=7)
+            else:
+                job.block_till = pd.to_datetime(block_till)
+            print(job.block_till)
         except Exception as e:
             errors.append(str(e))
             return False
@@ -689,7 +697,7 @@ class RequestHandler:
 
     @classmethod
     @provide_session
-    def change_job_status(cls, job_name, session=None, deactivate=True):
+    def change_job_status(cls, job_name, session=None, deactivate=True, by=None):
         """ set the job instance inactive """
         job = session.query(Job).filter(
                 Job.name==job_name).with_for_update().first()
@@ -700,6 +708,8 @@ class RequestHandler:
                     logger.debug("deactivate job: {}".format(str(job)))
                     job.active = False
                     job.next_run_local_ts = None
+                    if by is not None:
+                        job.block_by = by
                     session.commit()
                     return True
                 else:
@@ -712,6 +722,9 @@ class RequestHandler:
                     job.next_run_local_ts = get_next_run_ts(
                         job.schedule_interval,
                         datetime.now())
+                    job.block_by = None 
+                    job.block_till = None 
+                    job.block_msg = None
                     session.commit()
                     return True 
                 else:

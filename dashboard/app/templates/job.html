@@ -4,231 +4,256 @@
 <div class="container-fluid">
   <div class="page-header">
     <h1> 
-      <span class='danger'>{{ job.name }}</span>
+      <span id="jobHeader" jobName="{{job.name}}">{{ job.name }}</span>
     </h1>
 
   </div>
 
-  <div>
-    <!-- Actions defined here -->
-    <h3>
-      <!-- edit button -->
-      <span><a href="{{ url_for('main.edit_job', job_name=job.name ) }}" class="button btn btn-info" data-toggle="tooltip" title="info/edit">
-      <span  class="glyphicon glyphicon-pencil"></span> Edit </a>
-      </span>
-
-      <!-- run button -->
-      <button type="button" id="btnRun" class="btn btn-success" jobName="{{job.name}}"><span class="glyphicon glyphicon-play"></span> Run </button>
-
-      <!-- clear history button with warning-->
-      <a data-toggle="modal" data-target="#clearHistoryModal" class="button btn btn-default" title="clear"><span class="glyphicon glyphicon-floppy-remove"></span> Clear History </a>
-      
-      <div class="modal fade" id="clearHistoryModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
-          <div class="modal-dialog">
-              <div class="modal-content">
-                  <div class="modal-body">
-                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
-                      </button>
-                      <h4 class="modal-title" id="deleteModalLabel">Do you want to delete task history for job {{ job.name }}?</h4>
-                  </div>
-
-                  <div class="modal-footer">
-                      <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                      <button type="button" id="btnClear" class="btn btn-danger" jobName="{{job.name}}"> Clear </span></a>
-                  </div>
-              </div>
-          </div>
-      </div>
-
-      <!-- delete button with confirm pop-up -->
-      <a data-toggle="modal" data-target="#deleteModal" class="button btn btn-danger" title="delete"><span class="glyphicon glyphicon-trash"></span> Delete </a>
-      
-      <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
-          <div class="modal-dialog">
-              <div class="modal-content">
-                  <div class="modal-body">
-                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
-                      </button>
-                      <h4 class="modal-title" id="deleteModalLabel">Warning: you cannot undo delete.</h4>
-                  </div>
-
-                  <div class="modal-footer">
-                      <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                      <button type="button" id="btnDelete" class="btn btn-danger" jobName="{{job.name}}"> Delete </button>
-                  </div>
-              </div>
-          </div>
-      </div>
-
-      {% if job.active %}
-      <!-- block button -->
-      <a data-toggle="modal" data-target="#blockModal" class="button btn btn-warning" title="block"><span class="glyphicon glyphicon-eye-close"></span> Block</a>
-      <!-- block modal -->
-      <div class="modal fade" id="blockModal" tabindex="-1" role="dialog" aria-labelledby="blockModalLabel" aria-hidden="true">
-          <div class="modal-dialog">
-              <div class="modal-content">
-                  <div class="modal-header">
-                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
-                      </button>
-                      <h2 class="modal-title" id="blockModalLabel">Block Job</h2>
-                  </div>
-                  <div class="modal-body">
-                      <form role="form">
-                          <div class="form-group">
-                              <label for="blockTill" class="control-label">Block Till:</label>
-                              <input type="text" class="form-control" id="blockTill" placeholder="yyyy-mm-dd HH:MM or HH:MM for today">
-                          </div>
-                          <div class="form-group">
-                              <label for="message-text" class="control-label">Message:</label>
-                              <textarea class="form-control" id="blockMessage"></textarea>
-                          </div>
-                      </form>
-                  </div>
-                  <div class="modal-footer">
-                      <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                      <button type="button" id="btnBlock" class="btn btn-primary" jobName="{{job.name}}">Block</button>
-                  </div>
-              </div>
-          </div>
-      </div>
-      <!-- end block modal -->
-      {% else %}
-      <!-- unblock button -->
-      <button data-toggle='tooltip' title='activate job' type="button" id="btnUnblock" class="btn btn-primary" jobName="{{job.name}}"><span class="glyphicon glyphicon-eye-open"></span> Unblock </button>
-
-      {% endif %}
-
-    </h3>
-    <!-- End define all action buttons under the job title -->
-  </div>
 
   <div class="row content">
-  <div class="col-sm-7">
-    <h3>Recent Tasks</h3>
-    <table id="sortable_desc_on_ts" class="table table-hover is-breakable">
-      <thead>
-        <tr>
-          <th width='30%'>Execution Time (Local)</th>
-          <th width='70%'>Task Status/Out</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for task in tasks %}
-        <tr>
-          {% if task.state == 'SUCCESS' %}
-          <!-- This is hardcoded for datacheck output -->
-            {% if isinstance(task.result, str) and task.result.startswith('1') %}
-          <td class="success">{{ task.execution_date }}</td>
-          <td class="success">{{ task.result }}</td>
-            {% else %}
-          <td class="danger">{{ task.execution_date }}</td>
-          <td class="danger">{{ task.result }}</td>
-            {% endif %}
-          {% elif task.state in ("PENDING", "STARTED") %}
-          <td class="info">{{ task.execution_date }}</td>
-          <td class="info">{{ task.state }}</td>
-          {% else %}
-          <td class="warning">{{ task.execution_date }}</td>
-          <td class="warning">Task fail: {{ task.result }}</td>
-          {% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col-sm-5">
-
-      {% if current_user.is_authenticated() %}
-        {% if current_user.is_subscribed_to(name=job.name, job=True) %}
-        <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
-        {% else %}
-        <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
-        {% endif %}
-      {% else %}
-      <h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
-      {% endif %}
-      
-
-      <table class="table table-hover is-breakable">
-      <tbody>
-        {% if not job.active %}
-        <tr class="warning">
-          <td>Blocked Till</td>
-          <td>{{job.block_till}}</td> 
-        </tr>
-        <tr class="warning">
-          <td>Message</td>
-          <td>{{job.block_msg}}</td> 
-        </tr>
-        <tr class="warning">
-          <td>Blocked By</td>
-          <td>{{job.block_by}}</td> 
-        </tr>
-        {% else %}
-        <tr class="success">
-          <td>Active</td>
-          <td>{{ job.active }}</td>
-        </tr>
-        {% endif %}
-
-        <tr>
-          <td>Timezone</td>
-          <td>{{ job.timezone }}</td>
-        </tr>
-        <tr>
-          <td>Command</td>
-          <td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
-        </tr>
-        {% if job.operator == 'sql' %}
-        <tr>
-          <td>Database</td>
-          <td>{{ job.database }}</td> 
-        </tr>
-        {% endif %}
-        <tr>
-          <td>Run Interval</td>
-          <td> {{ job.schedule_interval }} </td>
-        </tr>
-        <tr>
-          <td>Reset Time</td>
-          <td> {{ job.reset_status_at.time() }} </td>
-        </tr>
-        <tr>
-          <td>Next Run</td>
-          <td>{{ job.next_run_local_ts }}</td> 
-        </tr>
-        <tr>
-          <td>Subscriptions</td>
-          <td>
-            {% for sub in alerts %}
-            {{sub}}<br>
-            {% endfor %}
-          </td> 
-        </tr>
-      </tbody>
-      </table>
+    <div class="col-sm-7">
     
-      <p> 
+      <!-- operation buttons -->
+      <div>
+        <h3>
+          <!-- edit button -->
+          <span><a href="{{ url_for('main.edit_job', job_name=job.name ) }}" class="button btn btn-info" data-toggle="tooltip" title="info/edit">
+          <span  class="glyphicon glyphicon-pencil"></span> Edit </a>
+          </span>
+
+          <!-- run button -->
+          <button type="button" id="btnRun" class="btn btn-success"><span class="glyphicon glyphicon-play"></span> Run </button>
+
+          <!-- clear history button with warning-->
+          <a data-toggle="modal" data-target="#clearHistoryModal" class="button btn btn-default" title="clear"><span class="glyphicon glyphicon-floppy-remove"></span> Clear History </a>
+          
+          <div class="modal fade" id="clearHistoryModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+              <div class="modal-dialog">
+                  <div class="modal-content">
+                      <div class="modal-body">
+                          <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
+                          </button>
+                          <h4 class="modal-title" id="deleteModalLabel">Do you want to delete task history for job {{ job.name }}?</h4>
+                      </div>
+
+                      <div class="modal-footer">
+                          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                          <button type="button" id="btnClear" class="btn btn-danger"> Clear </span></a>
+                      </div>
+                  </div>
+              </div>
+          </div>
+
+          <!-- delete button with confirm pop-up -->
+          <a data-toggle="modal" data-target="#deleteModal" class="button btn btn-danger" title="delete"><span class="glyphicon glyphicon-trash"></span> Delete </a>
+          
+          <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+              <div class="modal-dialog">
+                  <div class="modal-content">
+                      <div class="modal-body">
+                          <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
+                          </button>
+                          <h4 class="modal-title" id="deleteModalLabel">Warning: you cannot undo delete.</h4>
+                      </div>
+
+                      <div class="modal-footer">
+                          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                          <button type="button" id="btnDelete" class="btn btn-danger"> Delete </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+
+          {% if job.active %}
+          <!-- block button -->
+          <a data-toggle="modal" data-target="#blockModal" class="button btn btn-warning" title="block"><span class="glyphicon glyphicon-eye-close"></span> Block</a>
+          <!-- block modal -->
+          <div class="modal fade" id="blockModal" tabindex="-1" role="dialog" aria-labelledby="blockModalLabel" aria-hidden="true">
+              <div class="modal-dialog">
+                  <div class="modal-content">
+                      <div class="modal-header">
+                          <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span>
+                          </button>
+                          <h2 class="modal-title" id="blockModalLabel">Block Job</h2>
+                      </div>
+                      <div class="modal-body">
+                          <form role="form">
+                              <div class="form-group">
+                                  <label for="blockTillSelect" class="control-label">Block for:</label>
+                                  <select id="blockTillSelect">
+                                    <option value="1 day" selected> 1 day </option>
+                                    <option value="2 days"> 2 days </option>
+                                    <option value="1 week"> 1 week </option>
+                                    <option value="other"> other - specify </option>
+                                  </select>
+                              </div>
+                              <div id="blockTillText" class="form-group" hidden>
+                                  <label for="blockTill" class="control-label">Block Till:</label>
+                                  <input type="text" class="form-control" id="blockTill" placeholder="yyyy-mm-dd HH:MM or HH:MM for today">
+                              </div>
+                              <div class="form-group">
+                                  <label for="message-text" class="control-label">Message:</label>
+                                  <textarea class="form-control" id="blockMessage" placeholder="reason to block..."></textarea>
+                              </div>
+                          </form>
+                      </div>
+                      <div class="modal-footer">
+                          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                          <button type="button" id="btnBlock" class="btn btn-primary">Block</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+          <!-- end block modal -->
+          {% else %}
+          <!-- unblock button -->
+          <button data-toggle='tooltip' title='activate job' type="button" id="btnUnblock" class="btn btn-primary"><span class="glyphicon glyphicon-eye-open"></span> Unblock </button>
+
+          {% endif %}
+
+        </h3>
+        <!-- End define all action buttons under the job title -->
+      </div>
+
+      <p>
+      </p>
+
+      {% if not job.active %}
+      <!-- block bar -->
+      <table id="blockInfo" class="table table-hover is-breakable" style="background-color:#ffe6e6">
+        <thead>
+          <th width="20%"> User </th>
+          <th width="40%"> Activate At </th>
+          <th width="40%"> Message </th>
+        </thead>
+        <tr>
+            <td id="editBlocker">{{job.block_by}}</td> 
+            <td id="editBlockTill">{{job.block_till}}</td> 
+            <td id="editBlockMsg">{{job.block_msg}}</td> 
+        </tr>
+      </table>
+      {% endif %}
+
+      <hr>
+
+      <!-- all tasks in reverse time order -->
+      <div id="tasksDisplay">
+        <h3>Recent Tasks</h3>
+        <table id="sortable_desc_on_ts" class="table table-hover is-breakable">
+          <thead>
+            <tr>
+              <th width='30%'>Execution Time (Local)</th>
+              <th width='70%'>Task Status/Out</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for task in tasks %}
+            <tr>
+              {% if task.state == 'SUCCESS' %}
+              <!-- This is hardcoded for datacheck output -->
+                {% if isinstance(task.result, str) and task.result.startswith('1') %}
+              <td class="success">{{ task.execution_date }}</td>
+              <td class="success">{{ task.result }}</td>
+                {% else %}
+              <td class="danger">{{ task.execution_date }}</td>
+              <td class="danger">{{ task.result }}</td>
+                {% endif %}
+              {% elif task.state in ("PENDING", "STARTED") %}
+              <td class="info">{{ task.execution_date }}</td>
+              <td class="info">{{ task.state }}</td>
+              {% else %}
+              <td class="warning">{{ task.execution_date }}</td>
+              <td class="warning">Task fail: {{ task.result }}</td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="col-sm-5">
+      <div>
+        <!-- subscribe button -->
+        {% if current_user.is_authenticated() %}
+          {% if current_user.is_subscribed_to(name=job.name, job=True) %}
+          <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='unsubscribe') }}" type="button" class="btn btn-primary btn-md"> unsubscribe me</a></h3>
+          {% else %}
+          <h3><a href="{{ url_for('main.edit_subscription_for_current_user', inst_type='job', name=job.name, action='subscribe') }}" type="button" class="btn btn-primary btn-md"> subscribe me</a></h3>
+          {% endif %}
+        {% else %}
+        <h3><a href="{{ url_for('auth.login') }}"> Log in</a> to subscribe to alert.</h3>
+        {% endif %}
+      </div>
+      
+      <!-- display basic job information -->
+      <div>
+      <table id="jobInfo" class="table table-hover is-breakable">
+        <tbody>
+          <tr>
+            <td>Active</td>
+            <td>{{ job.active }}</td>
+          </tr>
+          <tr>
+            <td>Timezone</td>
+            <td>{{ job.timezone }}</td>
+          </tr>
+          <tr>
+            <td>Command</td>
+            <td rel="tooltip" title="{{ job.command }}">{{ job.short_command }} </td>
+          </tr>
+          {% if job.operator == 'sql' %}
+          <tr>
+            <td>Database</td>
+            <td>{{ job.database }}</td> 
+          </tr>
+          {% endif %}
+          <tr>
+            <td>Run Interval</td>
+            <td> {{ job.schedule_interval }} </td>
+          </tr>
+          <tr>
+            <td>Reset Time</td>
+            <td> {{ job.reset_status_at.time() }} </td>
+          </tr>
+          <tr>
+            <td>Next Run</td>
+            <td>{{ job.next_run_local_ts }}</td> 
+          </tr>
+          <tr>
+            <td>Subscriptions</td>
+            <td>
+              {% for sub in alerts %}
+              {{sub}}<br>
+              {% endfor %}
+            </td> 
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      
+      <!-- display all tags -->
+      <div> 
         <h4>
           tags:
           {% for t in tags %}
           <a href="{{ url_for('main.info_tag', tag_name=t) }}" role="button" class="btn btn-info btn-sm">{{ t }}</a>
           {% endfor %}
         </h4>
-      </p>
+      </div>  
+    </div>
 
-      
   </div>
-  </div>
-
-
 </div>
 
 {% endblock %}
 
 {% block scripts %}
 {{super()}}
+
+<script src="{{ url_for('static', filename='js/mindmup-editabletable.js') }}"></script>
+
 <script>
 $(document).ready(function() {
     // $('#sortable_desc_on_ts').DataTable();
@@ -246,20 +271,30 @@ $(document).ready(function() {
     $('[data-toggle="tooltip"]').tooltip(); 
 } );
 
+$('#blockTillSelect').change(function(){
+    if ($('#blockTillSelect').val() == 'other') {
+        $('#blockTillText').show();
+    } else {
+        $('#blockTillText').hide();
+    }
+});
 
-$('#btnBlock').click(function() {
+function block_this_job(block_till_select, block_till, msg, hide_modal){
     var block_job_url = {{url_for('main.block_job')|tojson|safe}};
     $.ajax({
         url: block_job_url,
         data: {
-            block_till: $('#blockTill').val(),
-            message: $('#blockMessage').val(),
-            job_name: $('#btnBlock').attr('jobName')
+            block_select: block_till_select,
+            block_till: block_till,
+            message: msg,
+            job_name: $('#jobHeader').attr('jobName')
         },
         type: 'POST',
         success: function(xhr, status, error) {
+          if(hide_modal) {
             $('#blockModal').modal('hide');
-            location.reload();
+          }
+          location.reload();
             // Re populate the grid
         },
         error: function(xhr, status, error) {
@@ -267,15 +302,14 @@ $('#btnBlock').click(function() {
             alert(r['message']);
         }
     })
-});
+}
 
-
-function job_operation(jobName, op, stayPage){
+function job_operation(op, stayPage){
     var op_job_url = {{url_for('main.job_operation')|tojson|safe}};
     $.ajax({
         url: op_job_url,
         data: {
-            job_name: jobName,
+            job_name: $('#jobHeader').attr('jobName'),
             operation: op
         },
         type: 'GET',
@@ -283,7 +317,7 @@ function job_operation(jobName, op, stayPage){
            if (stayPage) {
               location.reload();
             } else {
-              location.href = '/'
+              location.href = '/';
             }
         },
         error: function(xhr, status, error) {
@@ -294,24 +328,48 @@ function job_operation(jobName, op, stayPage){
 }
 
 $('#btnRun').click(function() {
-   var job_name = $('#btnRun').attr('jobName');
-    job_operation(job_name, "run", true);
+    job_operation("run", true);
 });
 
 $('#btnClear').click(function() {
-   var job_name = $('#btnClear').attr('jobName');
-    job_operation(job_name, "clear", true);
+    job_operation("clear", true);
 });
 
 $('#btnDelete').click(function() {
-   var job_name = $('#btnDelete').attr('jobName');
-    job_operation(job_name, "delete", false);
+    job_operation("delete", false);
 });
 
 $('#btnUnblock').click(function() {
-   var job_name = $('#btnUnblock').attr('jobName');
-    job_operation(job_name, "activate", true);
+    job_operation("activate", true);
 });
+
+$('#btnBlock').click(function() {
+    block_this_job($('#blockTillSelect').val(), $('#blockTill').val(), $('#blockMessage').val(), true);
+});
+
+
+$('#blockInfo').editableTableWidget({
+  cloneProperties: ['background', 'border', 'outline']
+});
+
+$('#editBlocker').on('validate', function(){ return false; }
+);
+
+$('#editBlockTill').on('change', function(evt, newValue){
+  alert($('#editBlockMsg').val());
+  block_this_job('other', newValue, $('#editBlockMsg').val(), false);
+});
+
+$('#editBlockMsg').on('change', function(evt, newValue){
+  alert(document.getElementById('editBlockTill').value);
+  // block_this_job('other', $('#editBlockTill').val(), newValue, false);
+});
+
+// $('table td').on('validate', function(evt, newValue) {
+//   if (....) { 
+//     return false; // mark cell as invalid 
+//   }
+// });
 
 </script>
 {% endblock %}
